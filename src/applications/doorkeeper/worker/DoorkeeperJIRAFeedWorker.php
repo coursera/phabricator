@@ -60,8 +60,6 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       return;
     }
 
-    $story_text = $this->renderStoryText();
-
     $xobjs = mgroup($xobjs, 'getApplicationDomain');
     foreach ($xobjs as $domain => $xobj_list) {
       $accounts = id(new PhabricatorExternalAccountQuery())
@@ -84,13 +82,16 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       foreach ($xobj_list as $xobj) {
         foreach ($accounts as $account) {
           try {
-            $provider->newJIRAFuture(
-              $account,
-              'rest/api/2/issue/'.$xobj->getObjectID().'/comment',
-              'POST',
-              array(
-                'body' => $story_text,
-              ))->resolveJSON();
+            $jira_key = $xobj->getObjectID();
+
+            if (self::shouldPostComment()) {
+              $this->postComment($account, $jira_key);
+            }
+
+            if (self::shouldPostLink()) {
+              $this->postLink($account, $jira_key);
+            }
+
             break;
           } catch (HTTPFutureResponseStatus $ex) {
             phlog($ex);
@@ -167,6 +168,64 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
     $try_users = array_filter($try_users);
 
     return $try_users;
+  }
+
+  private static function shouldPostComment() {
+    return PhabricatorEnv::getEnvConfig('jira.post-comment');
+  }
+
+  private static function shouldPostLink() {
+    return PhabricatorEnv::getEnvConfig('jira.post-link');
+  }
+
+  private function postComment($account, $jira_key) {
+    $provider = $this->getProvider();
+    $object = $this->getStoryObject();
+    $publisher = $this->getPublisher();
+    $uri = $publisher->getObjectURI($object);
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/comment',
+      'POST',
+      array(
+        'body' => $this->renderStoryText(),
+      ))->resolveJSON();
+  }
+
+  private function postLink($account, $jira_key) {
+    $provider = $this->getProvider();
+    $object = $this->getStoryObject();
+    $publisher = $this->getPublisher();
+    $uri = $publisher->getObjectURI($object);
+    $base_uri = PhabricatorEnv::getEnvConfig('phabricator.base-uri');
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/remotelink',
+      'POST',
+
+      // format documented at http://bit.ly/1K5T0Li
+      array(
+        'globalId' => 'phabricatorPhid='.$object->getPHID(),
+        'application' => array(
+          'type' => 'org.phabricator.differential',
+          'name' => 'Differential',
+        ),
+        'relationship' => 'implemented in',
+        'object' => array(
+          'url'     => $uri,
+          'title'   => $object->getMonogram(),
+          'summary' => $object->getTitle(),
+          'icon'    => array(
+            'url16x16'  => $base_uri.'rsrc/favicons/favicon-16x16.png',
+            'title'     => 'Revision',
+          ),
+          'status' => array(
+            'resolved' => $publisher->isObjectClosed($object),
+          ),
+        ),
+      ))->resolveJSON();
   }
 
   private function renderStoryText() {
