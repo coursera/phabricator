@@ -6,7 +6,7 @@
 
   # http://192.168.56.101:81/jenkins.php/jenkins.dkandu.me/job/c3-diph/buildWithParameters?DIFF_ID=926
   $username = "phabricator";
-  $password = "fbd4590d68d267ccc598931c9e329e92";
+  $password = "";
 
   $url2 = "$script?$query";
   print "Kicking off a build: $url2\n";
