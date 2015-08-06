@@ -59,6 +59,8 @@ final class PhabricatorDifferentialConfigOptions
       new DifferentialApplyPatchField(),
 
       new DifferentialRevisionIDField(),
+
+      new DifferentialAffectedServicesField(),
     );
 
     $default_fields = array();
