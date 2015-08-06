@@ -1,5 +1,16 @@
 <?php
 
+/**
+ * Custom field for Coursera to specify backend services
+ * that are affected by a given diff.
+ *
+ * We use the value of this field to determine which services
+ * should be [optionally] deployed after a diff is landed.
+ *
+ * Future improvements:
+ *   - Validate service names against a list of known services
+ *   - Determine which services are affected by parsing changed files (in Arcanist)
+ */
 final class DifferentialAffectedServicesField
   extends DifferentialStoredCustomField {
 
