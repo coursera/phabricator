@@ -72,9 +72,28 @@ final class DifferentialPrideField
     return true;
   }
 
+  public function getCommitMessageLabels() {
+    return array(
+      '',
+      '',
+    );
+  }
+
+  public function parseValueFromCommitMessage($value) {
+    return $value;
+  }
+
   public function readValueFromCommitMessage($value) {
     $this->setValue($value);
     return $this;
+  }
+
+  public function renderCommitMessageValue(array $handles) {
+    $value = $this->getValue();
+    if (!$value) {
+      return null;
+    }
+    return $value;
   }
 
 }
