@@ -75,7 +75,7 @@ final class DifferentialPrideField
     return id(new AphrontFormTextControl())
       ->setLabel(pht('Are you proud of this revision?'))
       ->setCaption(
-        pht('#AreWeProud')))
+        pht('#AreWeProud'))
       ->setName($this->getFieldKey())
       ->setValue(implode(', ', nonempty($this->getValue(), array())))
       ->setError($this->error);
