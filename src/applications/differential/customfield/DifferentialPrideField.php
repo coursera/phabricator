@@ -25,21 +25,8 @@ final class DifferentialPrideField
     return false;
   }
 
-  public function getValueForStorage() {
-    return json_encode($this->getValue());
-  }
-
-  public function setValueFromStorage($value) {
-    try {
-      $this->setValue(phutil_json_decode($value));
-    } catch (PhutilJSONParserException $ex) {
-      $this->setValue(array());
-    }
-    return $this;
-  }
-
   public function getFieldName() {
-    return pht('Are you proud of this revision?');
+    return pht('#AreYouProud');
   }
 
   public function getFieldDescription() {
@@ -59,10 +46,6 @@ final class DifferentialPrideField
   }
 
   public function shouldAppearInEditView() {
-    return true;
-  }
-
-  public function shouldAppearInApplicationTransactions() {
     return true;
   }
 
@@ -92,10 +75,6 @@ final class DifferentialPrideField
   public function readValueFromCommitMessage($value) {
     $this->setValue($value);
     return $this;
-  }
-
-  public function shouldAppearInConduitDictionary() {
-    return true;
   }
 
 }
