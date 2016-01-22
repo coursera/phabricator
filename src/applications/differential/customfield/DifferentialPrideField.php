@@ -74,8 +74,7 @@ final class DifferentialPrideField
 
   public function getCommitMessageLabels() {
     return array(
-      '',
-      '',
+      ''
     );
   }
 
