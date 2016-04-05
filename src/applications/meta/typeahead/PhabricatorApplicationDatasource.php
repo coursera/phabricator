@@ -3,6 +3,10 @@
 final class PhabricatorApplicationDatasource
   extends PhabricatorTypeaheadDatasource {
 
+  public function getBrowseTitle() {
+    return pht('Browse Applications');
+  }
+
   public function getPlaceholderText() {
     return pht('Type an application name...');
   }
@@ -24,7 +28,7 @@ final class PhabricatorApplicationDatasource
         continue;
       }
       $name = $application->getName().' '.$application->getShortDescription();
-      $img = 'phui-font-fa phui-icon-view '.$application->getFontIcon();
+      $img = 'phui-font-fa phui-icon-view '.$application->getIcon();
       $results[] = id(new PhabricatorTypeaheadResult())
         ->setName($name)
         ->setURI($uri)
@@ -37,7 +41,7 @@ final class PhabricatorApplicationDatasource
         ->setImageSprite('phabricator-search-icon '.$img);
     }
 
-    return $results;
+    return $this->filterResultsAgainstTokens($results);
   }
 
 }

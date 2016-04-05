@@ -3,15 +3,9 @@
 final class PhabricatorDashboardPanelEditController
   extends PhabricatorDashboardController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     // If the user is trying to create a panel directly on a dashboard, make
     // sure they have permission to see and edit the dashboard.
@@ -35,7 +29,7 @@ final class PhabricatorDashboardPanelEditController
       $manage_uri = $this->getApplicationURI('manage/'.$dashboard_id.'/');
     }
 
-    if ($this->id) {
+    if ($id) {
       $is_create = false;
 
       if ($dashboard) {
@@ -51,12 +45,16 @@ final class PhabricatorDashboardPanelEditController
 
       $panel = id(new PhabricatorDashboardPanelQuery())
         ->setViewer($viewer)
-        ->withIDs(array($this->id))
+        ->withIDs(array($id))
         ->requireCapabilities($capabilities)
         ->executeOne();
       if (!$panel) {
         return new Aphront404Response();
       }
+      $v_projects = PhabricatorEdgeQuery::loadDestinationPHIDs(
+        $panel->getPHID(),
+        PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+      $v_projects = array_reverse($v_projects);
 
       if ($dashboard) {
         $can_edit = PhabricatorPolicyFilter::hasCapability(
@@ -86,23 +84,24 @@ final class PhabricatorDashboardPanelEditController
       if (empty($types[$type])) {
         return $this->processPanelTypeRequest($request);
       }
+      $v_projects = array();
 
       $panel->setPanelType($type);
     }
 
     if ($is_create) {
-      $title = pht('New Panel');
-      $header = pht('Create New Panel');
+      $title = pht('Create New Panel');
       $button = pht('Create Panel');
+      $header_icon = 'fa-plus-square';
       if ($dashboard) {
         $cancel_uri = $manage_uri;
       } else {
         $cancel_uri = $this->getApplicationURI('panel/');
       }
     } else {
-      $title = pht('Edit %s', $panel->getMonogram());
-      $header = pht('Edit %s %s', $panel->getMonogram(), $panel->getName());
+      $title = pht('Edit Panel: %s', $panel->getName());
       $button = pht('Save Panel');
+      $header_icon = 'fa-pencil';
       if ($dashboard) {
         $cancel_uri = $manage_uri;
       } else {
@@ -136,6 +135,7 @@ final class PhabricatorDashboardPanelEditController
       $v_name = $request->getStr('name');
       $v_view_policy = $request->getStr('viewPolicy');
       $v_edit_policy = $request->getStr('editPolicy');
+      $v_projects = $request->getArr('projects');
 
       $type_name = PhabricatorDashboardPanelTransaction::TYPE_NAME;
       $type_view_policy = PhabricatorTransactions::TYPE_VIEW_POLICY;
@@ -154,6 +154,12 @@ final class PhabricatorDashboardPanelEditController
       $xactions[] = id(new PhabricatorDashboardPanelTransaction())
         ->setTransactionType($type_edit_policy)
         ->setNewValue($v_edit_policy);
+
+      $proj_edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
+      $xactions[] = id(new PhabricatorDashboardPanelTransaction())
+        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+        ->setMetadataValue('edge:type', $proj_edge_type)
+        ->setNewValue(array('=' => array_fuse($v_projects)));
 
       $field_xactions = $field_list->buildFieldTransactionsFromRequest(
         new PhabricatorDashboardPanelTransaction(),
@@ -232,6 +238,13 @@ final class PhabricatorDashboardPanelEditController
           ->setCapability(PhabricatorPolicyCapability::CAN_EDIT)
           ->setPolicies($policies));
 
+    $form->appendControl(
+      id(new AphrontFormTokenizerControl())
+        ->setLabel(pht('Projects'))
+        ->setName('projects')
+        ->setValue($v_projects)
+        ->setDatasource(new PhabricatorProjectDatasource()));
+
     $field_list->appendFieldsToForm($form);
 
     $crumbs = $this->buildApplicationCrumbs();
@@ -247,10 +260,11 @@ final class PhabricatorDashboardPanelEditController
         '/'.$panel->getMonogram());
       $crumbs->addTextCrumb(pht('Edit'));
     }
+    $crumbs->setBorder(true);
 
     if ($request->isAjax()) {
       return $this->newDialog()
-        ->setTitle($header)
+        ->setTitle($title)
         ->setSubmitURI($submit_uri)
         ->setWidth(AphrontDialogView::WIDTH_FORM)
         ->setValidationException($validation_exception)
@@ -266,18 +280,23 @@ final class PhabricatorDashboardPanelEditController
     }
 
     $box = id(new PHUIObjectBoxView())
-      ->setHeaderText($header)
+      ->setHeaderText(pht('Panel'))
       ->setValidationException($validation_exception)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $box,
-      ),
-      array(
-        'title' => $title,
-      ));
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon($header_icon);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter($box);
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
   private function processPanelTypeRequest(AphrontRequest $request) {
@@ -336,26 +355,33 @@ final class PhabricatorDashboardPanelEditController
     }
 
     $title = pht('Create Dashboard Panel');
+    $header_icon = 'fa-plus-square';
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(
       pht('Panels'),
       $this->getApplicationURI('panel/'));
     $crumbs->addTextCrumb(pht('New Panel'));
+    $crumbs->setBorder(true);
 
     $box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
+      ->setHeaderText(pht('Panel'))
       ->setFormErrors($errors)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $box,
-      ),
-      array(
-        'title' => $title,
-      ));
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon($header_icon);
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter($box);
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
   private function processPanelCloneRequest(

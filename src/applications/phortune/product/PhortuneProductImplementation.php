@@ -1,6 +1,6 @@
 <?php
 
-abstract class PhortuneProductImplementation {
+abstract class PhortuneProductImplementation extends Phobject {
 
   abstract public function loadImplementationsForRefs(
     PhabricatorUser $viewer,
@@ -12,8 +12,7 @@ abstract class PhortuneProductImplementation {
 
   protected function getContentSource() {
     return PhabricatorContentSource::newForSource(
-      PhabricatorContentSource::SOURCE_PHORTUNE,
-      array());
+      PhabricatorPhortuneContentSource::SOURCECONST);
   }
 
   public function getPurchaseName(

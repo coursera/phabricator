@@ -4,25 +4,30 @@ final class PhabricatorOAuthServerClient
   extends PhabricatorOAuthServerDAO
   implements
     PhabricatorPolicyInterface,
+    PhabricatorApplicationTransactionInterface,
     PhabricatorDestructibleInterface {
 
   protected $secret;
   protected $name;
   protected $redirectURI;
   protected $creatorPHID;
+  protected $isTrusted = 0;
   protected $viewPolicy;
   protected $editPolicy;
 
   public function getEditURI() {
-    return '/oauthserver/client/edit/'.$this->getPHID().'/';
+    $id = $this->getID();
+    return "/oauthserver/edit/{$id}/";
   }
 
   public function getViewURI() {
-    return '/oauthserver/client/view/'.$this->getPHID().'/';
+    $id = $this->getID();
+    return "/oauthserver/client/view/{$id}/";
   }
 
   public function getDeleteURI() {
-    return '/oauthserver/client/delete/'.$this->getPHID().'/';
+    $id = $this->getID();
+    return "/oauthserver/client/delete/{$id}/";
   }
 
   public static function initializeNewClient(PhabricatorUser $actor) {
@@ -40,6 +45,7 @@ final class PhabricatorOAuthServerClient
         'name' => 'text255',
         'secret' => 'text32',
         'redirectURI' => 'text255',
+        'isTrusted' => 'bool',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_phid' => null,
@@ -87,7 +93,31 @@ final class PhabricatorOAuthServerClient
     return null;
   }
 
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PhabricatorOAuthServerEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PhabricatorOAuthServerTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+    return $timeline;
+  }
+
+
 /* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
 
   public function destroyObjectPermanently(
     PhabricatorDestructionEngine $engine) {

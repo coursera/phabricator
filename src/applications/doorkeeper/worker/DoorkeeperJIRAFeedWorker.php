@@ -34,7 +34,17 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       $object->getPHID(),
       PhabricatorJiraIssueHasObjectEdgeType::EDGECONST);
     if (!$jira_issue_phids) {
-      $this->log("Story is about an object with no linked JIRA issues.\n");
+      $this->log(
+        "%s\n",
+        pht('Story is about an object with no linked JIRA issues.'));
+      return;
+    }
+
+    $do_anything = ($this->shouldPostComment() || $this->shouldPostLink());
+    if (!$do_anything) {
+      $this->log(
+        "%s\n",
+        pht('JIRA integration is configured not to post anything.'));
       return;
     }
 
@@ -44,17 +54,20 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       ->execute();
 
     if (!$xobjs) {
-      $this->log("Story object has no corresponding external JIRA objects.\n");
+      $this->log(
+        "%s\n",
+        pht('Story object has no corresponding external JIRA objects.'));
       return;
     }
 
     $try_users = $this->findUsersToPossess();
     if (!$try_users) {
-      $this->log("No users to act on linked JIRA objects.\n");
+      $this->log(
+        "%s\n",
+        pht('No users to act on linked JIRA objects.'));
       return;
     }
 
-    $story_text = $this->renderStoryText();
 
     $xobjs = mgroup($xobjs, 'getApplicationDomain');
     foreach ($xobjs as $domain => $xobj_list) {
@@ -78,20 +91,25 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       foreach ($xobj_list as $xobj) {
         foreach ($accounts as $account) {
           try {
-            $provider->newJIRAFuture(
-              $account,
-              'rest/api/2/issue/'.$xobj->getObjectID().'/comment',
-              'POST',
-              array(
-                'body' => $story_text,
-              ))->resolveJSON();
+            $jira_key = $xobj->getObjectID();
+
+            if ($this->shouldPostComment()) {
+              $this->postComment($account, $jira_key);
+            }
+
+            if ($this->shouldPostLink()) {
+              $this->postLink($account, $jira_key);
+            }
+
             break;
           } catch (HTTPFutureResponseStatus $ex) {
             phlog($ex);
             $this->log(
-              "Failed to update object %s using user %s.\n",
-              $xobj->getObjectID(),
-              $account->getUserPHID());
+              "%s\n",
+              pht(
+                'Failed to update object %s using user %s.',
+                $xobj->getObjectID(),
+                $account->getUserPHID()));
           }
         }
       }
@@ -113,7 +131,7 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
       $provider = PhabricatorJIRAAuthProvider::getJIRAProvider();
       if (!$provider) {
         throw new PhabricatorWorkerPermanentFailureException(
-          'No JIRA provider configured.');
+          pht('No JIRA provider configured.'));
       }
       $this->provider = $provider;
     }
@@ -161,14 +179,70 @@ final class DoorkeeperJIRAFeedWorker extends DoorkeeperFeedWorker {
     return $try_users;
   }
 
+  private function shouldPostComment() {
+    return $this->getProvider()->shouldCreateJIRAComment();
+  }
+
+  private function shouldPostLink() {
+    return $this->getProvider()->shouldCreateJIRALink();
+  }
+
+  private function postComment($account, $jira_key) {
+    $provider = $this->getProvider();
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/comment',
+      'POST',
+      array(
+        'body' => $this->renderStoryText(),
+      ))->resolveJSON();
+  }
+
   private function renderStoryText() {
     $object = $this->getStoryObject();
     $publisher = $this->getPublisher();
 
     $text = $publisher->getStoryText($object);
-    $uri = $publisher->getObjectURI($object);
 
-    return $text."\n\n".$uri;
+    if ($this->shouldPostLink()) {
+      return $text;
+    } else {
+      // include the link in the comment
+      return $text."\n\n".$publisher->getObjectURI($object);
+    }
   }
 
+  private function postLink($account, $jira_key) {
+    $provider = $this->getProvider();
+    $object = $this->getStoryObject();
+    $publisher = $this->getPublisher();
+    $icon_uri = celerity_get_resource_uri('rsrc/favicons/favicon-16x16.png');
+
+    $provider->newJIRAFuture(
+      $account,
+      'rest/api/2/issue/'.$jira_key.'/remotelink',
+      'POST',
+
+      // format documented at http://bit.ly/1K5T0Li
+      array(
+        'globalId' => $object->getPHID(),
+        'application' => array(
+          'type' => 'com.phacility.phabricator',
+          'name' => 'Phabricator',
+        ),
+        'relationship' => 'implemented in',
+        'object' => array(
+          'url'     => $publisher->getObjectURI($object),
+          'title'   => $publisher->getObjectTitle($object),
+          'icon'    => array(
+            'url16x16'  => $icon_uri,
+            'title'     => 'Phabricator',
+          ),
+          'status' => array(
+            'resolved' => $publisher->isObjectClosed($object),
+          ),
+        ),
+      ))->resolveJSON();
+  }
 }

@@ -2,12 +2,23 @@
 
 /**
  * Schedule and execute event triggers, which run code at specific times.
+ *
+ * Also performs garbage collection of old logs, caches, etc.
+ *
+ * @task garbage Garbage Collection
  */
 final class PhabricatorTriggerDaemon
   extends PhabricatorDaemon {
 
   const COUNTER_VERSION = 'trigger.version';
   const COUNTER_CURSOR = 'trigger.cursor';
+
+  private $garbageCollectors;
+  private $nextCollection;
+
+  private $anyNuanceData;
+  private $nuanceSources;
+  private $nuanceCursors;
 
   protected function run() {
 
@@ -54,7 +65,12 @@ final class PhabricatorTriggerDaemon
     // trying to reschedule events after an update could race with other web
     // processes or the daemon.
 
+    // We want to start the first GC cycle right away, not wait 4 hours.
+    $this->nextCollection = PhabricatorTime::getNow();
+
     do {
+      PhabricatorCaches::destroyRequestCache();
+
       $lock = PhabricatorGlobalLock::newLock('trigger');
 
       try {
@@ -86,7 +102,10 @@ final class PhabricatorTriggerDaemon
 
       $lock->unlock();
 
-      $this->sleep($this->getSleepDuration());
+      $sleep_duration = $this->getSleepDuration();
+      $sleep_duration = $this->runNuanceImportCursors($sleep_duration);
+      $sleep_duration = $this->runGarbageCollection($sleep_duration);
+      $this->sleep($sleep_duration);
     } while (!$this->shouldExit());
   }
 
@@ -248,7 +267,7 @@ final class PhabricatorTriggerDaemon
    * @return int Number of seconds to sleep for.
    */
   private function getSleepDuration() {
-    $sleep = 60;
+    $sleep = 5;
 
     $next_triggers = id(new PhabricatorWorkerTriggerQuery())
       ->setViewer($this->getViewer())
@@ -290,4 +309,150 @@ final class PhabricatorTriggerDaemon
       id(new PhabricatorWorkerTrigger())->establishConnection('w'),
       $counter_name);
   }
+
+
+/* -(  Garbage Collection  )------------------------------------------------- */
+
+
+  /**
+   * Run the garbage collector for up to a specified number of seconds.
+   *
+   * @param int Number of seconds the GC may run for.
+   * @return int Number of seconds remaining in the time budget.
+   * @task garbage
+   */
+  private function runGarbageCollection($duration) {
+    $run_until = (PhabricatorTime::getNow() + $duration);
+
+    // NOTE: We always run at least one GC cycle to make sure the GC can make
+    // progress even if the trigger queue is busy.
+    do {
+      $more_garbage = $this->updateGarbageCollection();
+      if (!$more_garbage) {
+        // If we don't have any more collection work to perform, we're all
+        // done.
+        break;
+      }
+    } while (PhabricatorTime::getNow() <= $run_until);
+
+    $remaining = max(0, $run_until - PhabricatorTime::getNow());
+
+    return $remaining;
+  }
+
+
+  /**
+   * Update garbage collection, possibly collecting a small amount of garbage.
+   *
+   * @return bool True if there is more garbage to collect.
+   * @task garbage
+   */
+  private function updateGarbageCollection() {
+    // If we're ready to start the next collection cycle, load all the
+    // collectors.
+    $next = $this->nextCollection;
+    if ($next && (PhabricatorTime::getNow() >= $next)) {
+      $this->nextCollection = null;
+
+      $all_collectors = PhabricatorGarbageCollector::getAllCollectors();
+      $this->garbageCollectors = $all_collectors;
+    }
+
+    // If we're in a collection cycle, continue collection.
+    if ($this->garbageCollectors) {
+      foreach ($this->garbageCollectors as $key => $collector) {
+        $more_garbage = $collector->runCollector();
+        if (!$more_garbage) {
+          unset($this->garbageCollectors[$key]);
+        }
+        // We only run one collection per call, to prevent triggers from being
+        // thrown too far off schedule if there's a lot of garbage to collect.
+        break;
+      }
+
+      if ($this->garbageCollectors) {
+        // If we have more work to do, return true.
+        return true;
+      }
+
+      // Otherwise, reschedule another cycle in 4 hours.
+      $now = PhabricatorTime::getNow();
+      $wait = phutil_units('4 hours in seconds');
+      $this->nextCollection = $now + $wait;
+    }
+
+    return false;
+  }
+
+
+/* -(  Nuance Importers  )--------------------------------------------------- */
+
+
+  private function runNuanceImportCursors($duration) {
+    $run_until = (PhabricatorTime::getNow() + $duration);
+
+    do {
+      $more_data = $this->updateNuanceImportCursors();
+      if (!$more_data) {
+        break;
+      }
+    } while (PhabricatorTime::getNow() <= $run_until);
+
+    $remaining = max(0, $run_until - PhabricatorTime::getNow());
+
+    return $remaining;
+  }
+
+
+  private function updateNuanceImportCursors() {
+    $nuance_app = 'PhabricatorNuanceApplication';
+    if (!PhabricatorApplication::isClassInstalled($nuance_app)) {
+      return false;
+    }
+
+    // If we haven't loaded sources yet, load them first.
+    if (!$this->nuanceSources && !$this->nuanceCursors) {
+      $this->anyNuanceData = false;
+
+      $sources = id(new NuanceSourceQuery())
+        ->setViewer($this->getViewer())
+        ->withIsDisabled(false)
+        ->withHasImportCursors(true)
+        ->execute();
+      if (!$sources) {
+        return false;
+      }
+
+      $this->nuanceSources = array_reverse($sources);
+    }
+
+    // If we don't have any cursors, move to the next source and generate its
+    // cursors.
+    if (!$this->nuanceCursors) {
+      $source = array_pop($this->nuanceSources);
+
+      $definition = $source->getDefinition()
+        ->setViewer($this->getViewer())
+        ->setSource($source);
+
+      $cursors = $definition->getImportCursors();
+      $this->nuanceCursors = array_reverse($cursors);
+    }
+
+    // Update the next cursor.
+    $cursor = array_pop($this->nuanceCursors);
+    if ($cursor) {
+      $more_data = $cursor->importFromSource();
+      if ($more_data) {
+        $this->anyNuanceData = true;
+      }
+    }
+
+    if (!$this->nuanceSources && !$this->nuanceCursors) {
+      return $this->anyNuanceData;
+    }
+
+    return true;
+  }
+
 }

@@ -13,7 +13,7 @@ final class PhabricatorNavigationRemarkupRule extends PhutilRemarkupRule {
       $text);
   }
 
-  public function markupNavigation($matches) {
+  public function markupNavigation(array $matches) {
     if (!$this->isFlatText($matches[0])) {
       return $matches[0];
     }
@@ -46,7 +46,7 @@ final class PhabricatorNavigationRemarkupRule extends PhutilRemarkupRule {
 
     static $icon_names;
     if (!$icon_names) {
-      $icon_names = array_fuse(PHUIIconView::getFontIcons());
+      $icon_names = array_fuse(PHUIIconView::getIcons());
     }
 
     $out = array();
@@ -71,7 +71,7 @@ final class PhabricatorNavigationRemarkupRule extends PhutilRemarkupRule {
       }
 
       if ($item['href'] !== null) {
-        if (PhabricatorEnv::isValidWebResource($item['href'])) {
+        if (PhabricatorEnv::isValidRemoteURIForLink($item['href'])) {
           $tag->setHref($item['href']);
           $tag->setExternal(true);
         }

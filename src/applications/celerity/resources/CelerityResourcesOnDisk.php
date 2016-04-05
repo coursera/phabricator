@@ -33,9 +33,12 @@ abstract class CelerityResourcesOnDisk extends CelerityPhysicalResources {
       'jpg',
       'gif',
       'swf',
+      'svg',
       'woff',
+      'woff2',
       'ttf',
       'eot',
+      'mp3',
     );
   }
 

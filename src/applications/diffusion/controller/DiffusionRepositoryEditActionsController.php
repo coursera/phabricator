@@ -3,24 +3,15 @@
 final class DiffusionRepositoryEditActionsController
   extends DiffusionRepositoryEditController {
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $viewer = $request->getUser();
-    $drequest = $this->diffusionRequest;
-    $repository = $drequest->getRepository();
-
-    $repository = id(new PhabricatorRepositoryQuery())
-      ->setViewer($viewer)
-      ->requireCapabilities(
-        array(
-          PhabricatorPolicyCapability::CAN_VIEW,
-          PhabricatorPolicyCapability::CAN_EDIT,
-        ))
-      ->withIDs(array($repository->getID()))
-      ->executeOne();
-
-    if (!$repository) {
-      return new Aphront404Response();
+  public function handleRequest(AphrontRequest $request) {
+    $response = $this->loadDiffusionContextForEdit();
+    if ($response) {
+      return $response;
     }
+
+    $viewer = $this->getViewer();
+    $drequest = $this->getDiffusionRequest();
+    $repository = $drequest->getRepository();
 
     $edit_uri = $this->getRepositoryControllerURI($repository, 'edit/');
 
@@ -62,6 +53,10 @@ final class DiffusionRepositoryEditActionsController
 
     $title = pht('Edit Actions (%s)', $repository->getName());
 
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon('fa-pencil');
+
     $policies = id(new PhabricatorPolicyQuery())
       ->setViewer($viewer)
       ->setObject($repository)
@@ -75,8 +70,7 @@ final class DiffusionRepositoryEditActionsController
           "new commits. You can disable publishing for this repository by ".
           "turning off **Notify/Publish**. This will disable notifications, ".
           "feed, and Herald (including audits and build plans) for this ".
-          "repository.".
-          "\n\n".
+          "repository.\n\n".
           "When Phabricator discovers a new commit, it can automatically ".
           "close associated revisions and tasks. If you don't want ".
           "Phabricator to close objects when it discovers new commits in ".
@@ -107,17 +101,21 @@ final class DiffusionRepositoryEditActionsController
           ->addCancelButton($edit_uri));
 
     $form_box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
+      ->setHeaderText(pht('Actions'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $form_box,
-      ),
-      array(
-        'title' => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
+
   }
 
 }

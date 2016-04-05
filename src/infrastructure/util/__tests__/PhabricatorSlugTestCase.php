@@ -34,13 +34,34 @@ final class PhabricatorSlugTestCase extends PhabricatorTestCase {
       'a/??/c'            => 'a/_/c/',
       'a/?b/c'            => 'a/b/c/',
       'a/b?/c'            => 'a/b/c/',
+      'a - b'             => 'a_-_b/',
+      'a[b]'              => 'a_b/',
+      'ab!'               => 'ab!/',
     );
 
     foreach ($slugs as $slug => $normal) {
       $this->assertEqual(
         $normal,
         PhabricatorSlug::normalize($slug),
-        "Normalization of '{$slug}'");
+        pht("Normalization of '%s'", $slug));
+    }
+  }
+
+  public function testProjectSlugs() {
+    $slugs = array(
+      'a:b' => 'a_b',
+      'a!b' => 'a_b',
+      'a - b' => 'a_-_b',
+      '' => '',
+      'Demonology: HSA (Hexes, Signs, Alchemy)' =>
+        'demonology_hsa_hexes_signs_alchemy',
+    );
+
+    foreach ($slugs as $slug => $normal) {
+      $this->assertEqual(
+        $normal,
+        PhabricatorSlug::normalizeProjectSlug($slug),
+        pht('Hashtag normalization of "%s"', $slug));
     }
   }
 
@@ -55,7 +76,7 @@ final class PhabricatorSlugTestCase extends PhabricatorTestCase {
       $this->assertEqual(
         $ancestry,
         PhabricatorSlug::getAncestry($slug),
-        "Ancestry of '{$slug}'");
+        pht("Ancestry of '%s'", $slug));
     }
   }
 
@@ -71,7 +92,7 @@ final class PhabricatorSlugTestCase extends PhabricatorTestCase {
       $this->assertEqual(
         $depth,
         PhabricatorSlug::getDepth($slug),
-        "Depth of '{$slug}'");
+        pht("Depth of '%s'", $slug));
     }
   }
 }

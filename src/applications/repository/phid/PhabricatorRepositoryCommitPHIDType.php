@@ -5,15 +5,15 @@ final class PhabricatorRepositoryCommitPHIDType extends PhabricatorPHIDType {
   const TYPECONST = 'CMIT';
 
   public function getTypeName() {
-    return pht('Commit');
-  }
-
-  public function getPHIDTypeApplicationClass() {
-    return 'PhabricatorDiffusionApplication';
+    return pht('Diffusion Commit');
   }
 
   public function newObject() {
     return new PhabricatorRepositoryCommit();
+  }
+
+  public function getPHIDTypeApplicationClass() {
+    return 'PhabricatorDiffusionApplication';
   }
 
   protected function buildQueryForObjects(

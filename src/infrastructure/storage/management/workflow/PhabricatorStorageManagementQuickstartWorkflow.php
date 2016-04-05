@@ -22,11 +22,14 @@ final class PhabricatorStorageManagementQuickstartWorkflow
   }
 
   public function execute(PhutilArgumentParser $args) {
+    parent::execute($args);
+
     $output = $args->getArg('output');
     if (!$output) {
       throw new PhutilArgumentUsageException(
         pht(
-          'Specify a file to write with `--output`.'));
+          'Specify a file to write with `%s`.',
+          '--output'));
     }
 
     $namespace = 'phabricator_quickstart_'.Filesystem::readRandomCharacters(8);
@@ -37,8 +40,10 @@ final class PhabricatorStorageManagementQuickstartWorkflow
       throw new PhutilArgumentUsageException(
         pht(
           'You can only generate a new quickstart file if MySQL supports '.
-          'the utf8mb4 character set (available in MySQL 5.5 and newer). The '.
-          'configured server does not support utf8mb4.'));
+          'the %s character set (available in MySQL 5.5 and newer). The '.
+          'configured server does not support %s.',
+          'utf8mb4',
+          'utf8mb4'));
     }
 
     $err = phutil_passthru(
@@ -95,7 +100,9 @@ final class PhabricatorStorageManagementQuickstartWorkflow
       // If we didn't make any changes, yell about it. We'll produce an invalid
       // dump otherwise.
       throw new PhutilArgumentUsageException(
-        pht('Failed to apply hack to adjust FULLTEXT search column!'));
+        pht(
+          'Failed to apply hack to adjust %s search column!',
+          'FULLTEXT'));
     }
 
     $dump = str_replace(
@@ -113,6 +120,16 @@ final class PhabricatorStorageManagementQuickstartWorkflow
       '{$CHARSET}',
       $dump);
 
+    $old = $dump;
+    $dump = preg_replace(
+      '/CHARACTER SET {\$CHARSET} COLLATE {\$COLLATE_SORT}/mi',
+      'CHARACTER SET {$CHARSET_SORT} COLLATE {$COLLATE_SORT}',
+      $dump);
+    if ($dump == $old) {
+      throw new PhutilArgumentUsageException(
+        pht('Failed to adjust SORT columns!'));
+    }
+
     // Strip out a bunch of unnecessary commands which make the dump harder
     // to handle and slower to import.
 
@@ -126,7 +143,7 @@ final class PhabricatorStorageManagementQuickstartWorkflow
     $dump = preg_replace('/^--.*$/m', '', $dump);
 
     // Remove table drops, locks, and unlocks. These are never relevant when
-    // performing q quickstart.
+    // performing a quickstart.
     $dump = preg_replace(
       '/^(DROP TABLE|LOCK TABLES|UNLOCK TABLES).*$/m',
       '',

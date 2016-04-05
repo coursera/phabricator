@@ -10,8 +10,10 @@ final class PhabricatorRepositoryCommit
     PhabricatorSubscribableInterface,
     PhabricatorMentionableInterface,
     HarbormasterBuildableInterface,
+    HarbormasterCircleCIBuildableInterface,
     PhabricatorCustomFieldInterface,
-    PhabricatorApplicationTransactionInterface {
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorFulltextInterface {
 
   protected $repositoryID;
   protected $phid;
@@ -98,6 +100,15 @@ final class PhabricatorRepositoryCommit
           'columns' => array('commitIdentifier', 'repositoryID'),
           'unique' => true,
         ),
+        'key_epoch' => array(
+          'columns' => array('epoch'),
+        ),
+        'key_author' => array(
+          'columns' => array('authorPHID', 'epoch'),
+        ),
+      ),
+      self::CONFIG_NO_MUTATE => array(
+        'importStatus',
       ),
     ) + parent::getConfiguration();
   }
@@ -193,10 +204,7 @@ final class PhabricatorRepositoryCommit
   }
 
   public function getURI() {
-    $repository = $this->getRepository();
-    $callsign = $repository->getCallsign();
-    $commit_identifier = $this->getCommitIdentifier();
-    return '/r'.$callsign.$commit_identifier;
+    return '/'.$this->getMonogram();
   }
 
   /**
@@ -241,6 +249,61 @@ final class PhabricatorRepositoryCommit
     return $this->setAuditStatus($status);
   }
 
+  public function getMonogram() {
+    $repository = $this->getRepository();
+    $callsign = $repository->getCallsign();
+    $identifier = $this->getCommitIdentifier();
+    if ($callsign !== null) {
+      return "r{$callsign}{$identifier}";
+    } else {
+      $id = $repository->getID();
+      return "R{$id}:{$identifier}";
+    }
+  }
+
+  public function getDisplayName() {
+    $repository = $this->getRepository();
+    $identifier = $this->getCommitIdentifier();
+    return $repository->formatCommitName($identifier);
+  }
+
+  /**
+   * Return a local display name for use in the context of the containing
+   * repository.
+   *
+   * In Git and Mercurial, this returns only a short hash, like "abcdef012345".
+   * See @{method:getDisplayName} for a short name that always includes
+   * repository context.
+   *
+   * @return string Short human-readable name for use inside a repository.
+   */
+  public function getLocalName() {
+    $repository = $this->getRepository();
+    $identifier = $this->getCommitIdentifier();
+    return $repository->formatCommitName($identifier, $local = true);
+  }
+
+  public function renderAuthorLink($handles) {
+    $author_phid = $this->getAuthorPHID();
+    if ($author_phid && isset($handles[$author_phid])) {
+      return $handles[$author_phid]->renderLink();
+    }
+
+    return $this->renderAuthorShortName($handles);
+  }
+
+  public function renderAuthorShortName($handles) {
+    $author_phid = $this->getAuthorPHID();
+    if ($author_phid && isset($handles[$author_phid])) {
+      return $handles[$author_phid]->getName();
+    }
+
+    $data = $this->getCommitData();
+    $name = $data->getAuthorName();
+
+    $parsed = new PhutilEmailAddress($name);
+    return nonempty($parsed->getDisplayName(), $parsed->getAddress());
+  }
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
@@ -256,8 +319,6 @@ final class PhabricatorRepositoryCommit
       case PhabricatorPolicyCapability::CAN_VIEW:
         return $this->getRepository()->getPolicy($capability);
       case PhabricatorPolicyCapability::CAN_EDIT:
-        // TODO: (T603) Who should be able to edit a commit? For now, retain
-        // the existing policy.
         return PhabricatorPolicies::POLICY_USER;
     }
   }
@@ -310,6 +371,10 @@ final class PhabricatorRepositoryCommit
 /* -(  HarbormasterBuildableInterface  )------------------------------------- */
 
 
+  public function getHarbormasterBuildableDisplayPHID() {
+    return $this->getHarbormasterBuildablePHID();
+  }
+
   public function getHarbormasterBuildablePHID() {
     return $this->getPHID();
   }
@@ -325,6 +390,7 @@ final class PhabricatorRepositoryCommit
     $repo = $this->getRepository();
 
     $results['repository.callsign'] = $repo->getCallsign();
+    $results['repository.phid'] = $repo->getPHID();
     $results['repository.vcs'] = $repo->getVersionControlSystem();
     $results['repository.uri'] = $repo->getPublicCloneURI();
 
@@ -336,6 +402,8 @@ final class PhabricatorRepositoryCommit
       'buildable.commit' => pht('The commit identifier, if applicable.'),
       'repository.callsign' =>
         pht('The callsign of the repository in Phabricator.'),
+      'repository.phid' =>
+        pht('The PHID of the repository in Phabricator.'),
       'repository.vcs' =>
         pht('The version control system, either "svn", "hg" or "git".'),
       'repository.uri' =>
@@ -344,13 +412,57 @@ final class PhabricatorRepositoryCommit
   }
 
 
+/* -(  HarbormasterCircleCIBuildableInterface  )----------------------------- */
+
+
+  public function getCircleCIGitHubRepositoryURI() {
+    $repository = $this->getRepository();
+
+    $commit_phid = $this->getPHID();
+    $repository_phid = $repository->getPHID();
+
+    if ($repository->isHosted()) {
+      throw new Exception(
+        pht(
+          'This commit ("%s") is associated with a hosted repository '.
+          '("%s"). Repositories must be imported from GitHub to be built '.
+          'with CircleCI.',
+          $commit_phid,
+          $repository_phid));
+    }
+
+    $remote_uri = $repository->getRemoteURI();
+    $path = HarbormasterCircleCIBuildStepImplementation::getGitHubPath(
+      $remote_uri);
+    if (!$path) {
+      throw new Exception(
+        pht(
+          'This commit ("%s") is associated with a repository ("%s") that '.
+          'with a remote URI ("%s") that does not appear to be hosted on '.
+          'GitHub. Repositories must be hosted on GitHub to be built with '.
+          'CircleCI.',
+          $commit_phid,
+          $repository_phid,
+          $remote_uri));
+    }
+
+    return $remote_uri;
+  }
+
+  public function getCircleCIBuildIdentifierType() {
+    return 'revision';
+  }
+
+  public function getCircleCIBuildIdentifier() {
+    return $this->getCommitIdentifier();
+  }
+
+
 /* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
 
 
   public function getCustomFieldSpecificationForRole($role) {
-    // TODO: We could make this configurable eventually, but just use the
-    // defaults for now.
-    return array();
+    return PhabricatorEnv::getEnvConfig('diffusion.fields');
   }
 
   public function getCustomFieldBaseClass() {
@@ -376,14 +488,6 @@ final class PhabricatorRepositoryCommit
     // right now because we are not guaranteed to have the data.
 
     return ($phid == $this->getAuthorPHID());
-  }
-
-  public function shouldShowSubscribersProperty() {
-    return true;
-  }
-
-  public function shouldAllowSubscription($phid) {
-    return true;
   }
 
 
@@ -427,6 +531,13 @@ final class PhabricatorRepositoryCommit
     }
 
     return $timeline->setPathMap($path_map);
+  }
+
+/* -(  PhabricatorFulltextInterface  )--------------------------------------- */
+
+
+  public function newFulltextEngine() {
+    return new DiffusionCommitFulltextEngine();
   }
 
 }

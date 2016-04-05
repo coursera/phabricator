@@ -17,14 +17,15 @@ final class PhabricatorEdgeConfig extends PhabricatorEdgeConstants {
 
     static $class_map = array(
       PhabricatorPHIDConstants::PHID_TYPE_TOBJ  => 'HarbormasterObject',
-      PhabricatorPHIDConstants::PHID_TYPE_XOBJ  => 'DoorkeeperExternalObject',
     );
 
     $class = idx($class_map, $phid_type);
 
     if (!$class) {
       throw new Exception(
-        "Edges are not available for objects of type '{$phid_type}'!");
+        pht(
+          "Edges are not available for objects of type '%s'!",
+          $phid_type));
     }
 
     return newv($class, array())->establishConnection($conn_type);

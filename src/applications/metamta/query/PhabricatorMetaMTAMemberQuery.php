@@ -42,28 +42,70 @@ final class PhabricatorMetaMTAMemberQuery extends PhabricatorQuery {
           $projects = id(new PhabricatorProjectQuery())
             ->setViewer($this->getViewer())
             ->withPHIDs($phids)
+            ->needMembers(true)
+            ->needWatchers(true)
             ->execute();
 
-          $subscribers = id(new PhabricatorSubscribersQuery())
-            ->withObjectPHIDs($phids)
-            ->execute();
+          $edge_type = PhabricatorProjectSilencedEdgeType::EDGECONST;
+
+          $edge_query = id(new PhabricatorEdgeQuery())
+            ->withSourcePHIDs($phids)
+            ->withEdgeTypes(
+              array(
+                $edge_type,
+              ));
+
+          $edge_query->execute();
 
           $projects = mpull($projects, null, 'getPHID');
           foreach ($phids as $phid) {
             $project = idx($projects, $phid);
+
             if (!$project) {
               $results[$phid] = array();
-            } else {
-              $results[$phid] = idx($subscribers, $phid, array());
+              continue;
             }
+
+            // Recipients are members who haven't silenced the project, plus
+            // watchers.
+
+            $members = $project->getMemberPHIDs();
+            $members = array_fuse($members);
+
+            $watchers = $project->getWatcherPHIDs();
+            $watchers = array_fuse($watchers);
+
+            $silenced = $edge_query->getDestinationPHIDs(
+              array($phid),
+              array($edge_type));
+            $silenced = array_fuse($silenced);
+
+            $result_map = array_diff_key($members, $silenced);
+            $result_map = $result_map + $watchers;
+
+            $results[$phid] = array_values($result_map);
           }
           break;
         default:
+          // For other types, just map the PHID to itself without modification.
+          // This allows callers to do less work.
+          foreach ($phids as $phid) {
+            $results[$phid] = array($phid);
+          }
           break;
       }
     }
 
     return $results;
+  }
+
+
+  /**
+   * Execute the query, merging results into a single list of unique member
+   * PHIDs.
+   */
+  public function executeExpansion() {
+    return array_unique(array_mergev($this->execute()));
   }
 
 }

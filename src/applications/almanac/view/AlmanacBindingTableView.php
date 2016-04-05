@@ -3,8 +3,9 @@
 final class AlmanacBindingTableView extends AphrontView {
 
   private $bindings;
-  private $handles;
   private $noDataString;
+
+  private $hideServiceColumn;
 
   public function setNoDataString($no_data_string) {
     $this->noDataString = $no_data_string;
@@ -13,15 +14,6 @@ final class AlmanacBindingTableView extends AphrontView {
 
   public function getNoDataString() {
     return $this->noDataString;
-  }
-
-  public function setHandles(array $handles) {
-    $this->handles = $handles;
-    return $this;
-  }
-
-  public function getHandles() {
-    return $this->handles;
   }
 
   public function setBindings(array $bindings) {
@@ -33,10 +25,42 @@ final class AlmanacBindingTableView extends AphrontView {
     return $this->bindings;
   }
 
+  public function setHideServiceColumn($hide_service_column) {
+    $this->hideServiceColumn = $hide_service_column;
+    return $this;
+  }
+
+  public function getHideServiceColumn() {
+    return $this->hideServiceColumn;
+  }
+
   public function render() {
     $bindings = $this->getBindings();
-    $handles = $this->getHandles();
     $viewer = $this->getUser();
+
+    $phids = array();
+    foreach ($bindings as $binding) {
+      $phids[] = $binding->getServicePHID();
+      $phids[] = $binding->getDevicePHID();
+      $phids[] = $binding->getInterface()->getNetworkPHID();
+    }
+    $handles = $viewer->loadHandles($phids);
+
+    $icon_disabled = id(new PHUIIconView())
+      ->setIcon('fa-ban')
+      ->addSigil('has-tooltip')
+      ->setMetadata(
+        array(
+          'tip' => pht('Disabled'),
+        ));
+
+    $icon_active = id(new PHUIIconView())
+      ->setIcon('fa-check')
+      ->addSigil('has-tooltip')
+      ->setMetadata(
+        array(
+          'tip' => pht('Active'),
+        ));
 
     $rows = array();
     foreach ($bindings as $binding) {
@@ -45,9 +69,10 @@ final class AlmanacBindingTableView extends AphrontView {
 
       $rows[] = array(
         $binding->getID(),
-        $handles[$binding->getServicePHID()]->renderLink(),
-        $handles[$binding->getDevicePHID()]->renderLink(),
-        $handles[$binding->getInterface()->getNetworkPHID()]->renderLink(),
+        ($binding->getIsDisabled() ? $icon_disabled : $icon_active),
+        $handles->renderHandle($binding->getServicePHID()),
+        $handles->renderHandle($binding->getDevicePHID()),
+        $handles->renderHandle($binding->getInterface()->getNetworkPHID()),
         $binding->getInterface()->renderDisplayAddress(),
         phutil_tag(
           'a',
@@ -64,6 +89,7 @@ final class AlmanacBindingTableView extends AphrontView {
       ->setHeaders(
         array(
           pht('ID'),
+          null,
           pht('Service'),
           pht('Device'),
           pht('Network'),
@@ -73,11 +99,18 @@ final class AlmanacBindingTableView extends AphrontView {
       ->setColumnClasses(
         array(
           '',
+          'icon',
           '',
           '',
           '',
           'wide',
           'action',
+        ))
+      ->setColumnVisibility(
+        array(
+          true,
+          true,
+          !$this->getHideServiceColumn(),
         ));
 
     return $table;

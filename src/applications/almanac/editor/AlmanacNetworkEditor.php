@@ -11,6 +11,10 @@ final class AlmanacNetworkEditor
     return pht('Almanac Network');
   }
 
+  protected function supportsSearch() {
+    return true;
+  }
+
   public function getTransactionTypes() {
     $types = parent::getTransactionTypes();
 
@@ -52,9 +56,6 @@ final class AlmanacNetworkEditor
       case AlmanacNetworkTransaction::TYPE_NAME:
         $object->setName($xaction->getNewValue());
         return;
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
-        return;
     }
 
     return parent::applyCustomInternalTransaction($object, $xaction);
@@ -66,8 +67,6 @@ final class AlmanacNetworkEditor
 
     switch ($xaction->getTransactionType()) {
       case AlmanacNetworkTransaction::TYPE_NAME:
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
         return;
     }
 

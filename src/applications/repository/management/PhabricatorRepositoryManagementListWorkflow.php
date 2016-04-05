@@ -6,7 +6,7 @@ final class PhabricatorRepositoryManagementListWorkflow
   protected function didConstruct() {
     $this
       ->setName('list')
-      ->setSynopsis('Show a list of repositories.')
+      ->setSynopsis(pht('Show a list of repositories.'))
       ->setArguments(array());
   }
 
@@ -18,10 +18,10 @@ final class PhabricatorRepositoryManagementListWorkflow
       ->execute();
     if ($repos) {
       foreach ($repos as $repo) {
-        $console->writeOut("%s\n", $repo->getCallsign());
+        $console->writeOut("%s\n", $repo->getMonogram());
       }
     } else {
-      $console->writeErr("%s\n", 'There are no repositories.');
+      $console->writeErr("%s\n", pht('There are no repositories.'));
     }
 
     return 0;

@@ -79,7 +79,10 @@ final class PhabricatorBuiltinPatchList extends PhabricatorSQLPatchList {
       ),
       'db.user' => array(),
       'db.worker' => array(),
-      'db.xhpastview' => array(),
+      'db.xhpast' => array(),
+      'db.xhpastview' => array(
+        'dead' => true,
+      ),
       'db.cache' => array(),
       'db.fact' => array(),
       'db.ponder' => array(),
@@ -104,6 +107,10 @@ final class PhabricatorBuiltinPatchList extends PhabricatorSQLPatchList {
       'db.system' => array(),
       'db.fund' => array(),
       'db.almanac' => array(),
+      'db.multimeter' => array(),
+      'db.spaces' => array(),
+      'db.phurl' => array(),
+      'db.badges' => array(),
       '0000.legacy.sql' => array(
         'legacy' => 0,
       ),

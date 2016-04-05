@@ -6,6 +6,11 @@ final class PhortuneSubscriptionSearchEngine
   private $merchant;
   private $account;
 
+  public function canUseInPanelContext() {
+    // These only make sense in an account or merchant context.
+    return false;
+  }
+
   public function setAccount(PhortuneAccount $account) {
     $this->account = $account;
     return $this;
@@ -26,6 +31,10 @@ final class PhortuneSubscriptionSearchEngine
 
   public function getResultTypeDescription() {
     return pht('Phortune Subscriptions');
+  }
+
+  public function getApplicationClassName() {
+    return 'PhabricatorPhortuneApplication';
   }
 
   public function buildSavedQueryFromRequest(AphrontRequest $request) {
@@ -149,8 +158,11 @@ final class PhortuneSubscriptionSearchEngine
       $header = pht('Your Subscriptions');
     }
 
-    return id(new PHUIObjectBoxView())
-      ->setHeaderText($header)
-      ->appendChild($table);
+    $table->setNotice($header);
+
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setTable($table);
+
+    return $result;
   }
 }

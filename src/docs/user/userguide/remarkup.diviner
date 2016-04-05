@@ -19,6 +19,7 @@ formatting text in Remarkup.
 These are inline styles, and can be applied to most text:
 
   **bold** //italic// `monospaced` ##monospaced## ~~deleted~~ __underlined__
+  !!highlighted!!
   D123 T123 rX123           # Link to Objects
   {D123} {T123}             # Link to Objects (Full Name)
   {F123}                    # Embed Images
@@ -63,9 +64,11 @@ Format **basic text styles** like this:
   ##monospaced text##
   ~~deleted text~~
   __underlined text__
+  !!highlighted text!!
 
 Those produce **bold text**, //italic text//, `monospaced text`, ##monospaced
-text##, ~~deleted text~~, and __underlined text__, respectively.
+text##, ~~deleted text~~, __underlined text__, and !!highlighted text!!
+respectively.
 
 = Layout =
 
@@ -92,6 +95,9 @@ You can optionally omit the trailing `=` signs -- that is, these are the same:
 This produces headers like the ones in this document. Make sure you have an
 empty line before and after the header.
 
+Lists
+=====
+
 Make **lists** by beginning each item with a `-` or a `*`:
 
   lang=text
@@ -116,6 +122,21 @@ You can make numbered lists with a `#` instead of `-` or `*`:
   # Articuno
   # Zapdos
   # Moltres
+
+Numbered lists can also be started with `1.` or `1)`. If you use a number other
+than `1`, the list will start at that number instead. For example, this:
+
+```
+  200) OK
+  201) Created
+  202) Accepted
+```
+
+...produces this:
+
+  200) OK
+  201) Created
+  202) Accepted
 
 You can also nest lists:
 
@@ -258,10 +279,22 @@ You can use `lines=N` to limit the vertical size of a chunk of code, and
   <p>Mangostine</p>
   <p>Melon</p>
 
-You can also use `NOTE:`, `WARNING:`, or `IMPORTANT:` to call out an important
- idea.
+
+You can use the `NOTE:`, `WARNING:` or `IMPORTANT:` elements to call attention
+to an important idea.
+
+For example, write this:
+
+```
+NOTE: Best practices in proton pack operation include not crossing the streams.
+```
+
+...to produce this:
 
 NOTE: Best practices in proton pack operation include not crossing the streams.
+
+Using `WARNING:` or `IMPORTANT:` at the beginning of the line changes the
+color of the callout:
 
 WARNING: Crossing the streams can result in total protonic reversal!
 
@@ -269,7 +302,7 @@ IMPORTANT: Don't cross the streams!
 
 In addition, you can use `(NOTE)`, `(WARNING)`, or `(IMPORTANT)` to get the
 same effect but without `(NOTE)`, `(WARNING)`, or `(IMPORTANT)` appearing in
-the rendered result. For example
+the rendered result. For example, this callout uses `(NOTE)`:
 
 (NOTE) Dr. Egon Spengler is the best resource for additional proton pack
  questions.
@@ -466,6 +499,12 @@ For a list of available icons and colors, check the UIExamples application.
 [[ http://fortawesome.github.io/Font-Awesome/ | FontAwesome ]], so you can also
 browse the collection there.)
 
+You can add `spin` to make the icon spin:
+
+  {icon cog spin}
+
+This renders: {icon cog spin}
+
 
 = Phriction Documents =
 
@@ -493,10 +532,12 @@ escape HTML and preserve line breaks).
 
 Remarkup supports simple table syntax. For example, this:
 
-  | Fruit  | Color  | Price   | Peel?
-  | -----  | -----  | -----   | -----
-  | Apple  | red    | `$0.93` | no
-  | Banana | yellow | `$0.19` | **YES**
+```
+| Fruit  | Color  | Price   | Peel?
+| -----  | -----  | -----   | -----
+| Apple  | red    | `$0.93` | no
+| Banana | yellow | `$0.19` | **YES**
+```
 
 ...produces this:
 
@@ -507,26 +548,28 @@ Remarkup supports simple table syntax. For example, this:
 
 Remarkup also supports a simplified HTML table syntax. For example, this:
 
-  <table>
-    <tr>
-      <th>Fruit</th>
-      <th>Color</th>
-      <th>Price</th>
-      <th>Peel?</th>
-    </tr>
-    <tr>
-      <td>Apple</td>
-      <td>red</td>
-      <td>`$0.93`</td>
-      <td>no</td>
-    </tr>
-    <tr>
-      <td>Banana</td>
-      <td>yellow</td>
-      <td>`$0.19`</td>
-      <td>**YES**</td>
-    </tr>
-  </table>
+```
+<table>
+  <tr>
+    <th>Fruit</th>
+    <th>Color</th>
+    <th>Price</th>
+    <th>Peel?</th>
+  </tr>
+  <tr>
+    <td>Apple</td>
+    <td>red</td>
+    <td>`$0.93`</td>
+    <td>no</td>
+  </tr>
+  <tr>
+    <td>Banana</td>
+    <td>yellow</td>
+    <td>`$0.19`</td>
+    <td>**YES**</td>
+  </tr>
+</table>
+```
 
 ...produces this:
 

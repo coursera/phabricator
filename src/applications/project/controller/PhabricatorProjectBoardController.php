@@ -3,20 +3,12 @@
 abstract class PhabricatorProjectBoardController
   extends PhabricatorProjectController {
 
-  private $project;
+  protected function getProfileMenu() {
+    $menu = parent::getProfileMenu();
 
-  protected function setProject(PhabricatorProject $project) {
-    $this->project = $project;
-    return $this;
-  }
-  protected function getProject() {
-    return $this->project;
-  }
+    $menu->selectFilter(PhabricatorProject::PANEL_WORKBOARD);
+    $menu->addClass('project-board-nav');
 
-  public function buildIconNavView(PhabricatorProject $project) {
-    $id = $project->getID();
-    $nav = parent::buildIconNavView($project);
-    $nav->selectFilter("board/{$id}/");
-    return $nav;
+    return $menu;
   }
 }

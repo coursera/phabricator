@@ -16,18 +16,17 @@ JX.behavior('differential-dropdown-menus', function(config) {
   var pht = JX.phtize(config.pht);
 
   function show_more(container) {
+    var view = JX.ChangesetViewManager.getForNode(container);
+
     var nodes = JX.DOM.scry(container, 'tr', 'context-target');
     for (var ii = 0; ii < nodes.length; ii++) {
       var show = JX.DOM.scry(nodes[ii], 'a', 'show-more');
       for (var jj = 0; jj < show.length; jj++) {
-        if (JX.Stratcom.getData(show[jj]).type != 'all') {
+        var data = JX.Stratcom.getData(show[jj]);
+        if (data.type != 'all') {
           continue;
         }
-        var event_data = {
-          context : nodes[ii],
-          show : show[jj]
-        };
-        JX.Stratcom.invoke('differential-reveal-context', null, event_data);
+        view.loadContext(data.range, nodes[ii], true);
       }
     }
   }
@@ -181,7 +180,7 @@ JX.behavior('differential-dropdown-menus', function(config) {
       if (nodes.length) {
         reveal_item
           .setDisabled(false)
-          .setName(pht('Show Entire File'))
+          .setName(pht('Show All Context'))
           .setIcon('fa-file-o')
           .setHandler(function(e) {
             show_more(JX.$(data.containerID));
@@ -192,7 +191,7 @@ JX.behavior('differential-dropdown-menus', function(config) {
         reveal_item
           .setDisabled(true)
           .setIcon('fa-file')
-          .setName(pht('Entire File Shown'))
+          .setName(pht('All Context Shown'))
           .setHandler(function(e) { e.prevent(); });
       }
 

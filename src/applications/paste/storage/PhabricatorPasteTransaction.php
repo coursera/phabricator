@@ -6,6 +6,11 @@ final class PhabricatorPasteTransaction
   const TYPE_CONTENT = 'paste.create';
   const TYPE_TITLE = 'paste.title';
   const TYPE_LANGUAGE = 'paste.language';
+  const TYPE_STATUS = 'paste.status';
+
+  const MAILTAG_CONTENT = 'paste-content';
+  const MAILTAG_OTHER = 'paste-other';
+  const MAILTAG_COMMENT = 'paste-comment';
 
   public function getApplicationName() {
     return 'pastebin';
@@ -36,7 +41,10 @@ final class PhabricatorPasteTransaction
     switch ($this->getTransactionType()) {
       case self::TYPE_TITLE:
       case self::TYPE_LANGUAGE:
-        return ($old === null);
+        if ($old === null) {
+          return true;
+        }
+        break;
     }
     return parent::shouldHide();
   }
@@ -50,6 +58,15 @@ final class PhabricatorPasteTransaction
       case self::TYPE_LANGUAGE:
         return 'fa-pencil';
         break;
+      case self::TYPE_STATUS:
+        $new = $this->getNewValue();
+        switch ($new) {
+          case PhabricatorPaste::STATUS_ACTIVE:
+            return 'fa-check';
+          case PhabricatorPaste::STATUS_ARCHIVED:
+            return 'fa-ban';
+        }
+      break;
     }
     return parent::getIcon();
   }
@@ -63,7 +80,11 @@ final class PhabricatorPasteTransaction
 
     $type = $this->getTransactionType();
     switch ($type) {
-      case PhabricatorPasteTransaction::TYPE_CONTENT:
+      case PhabricatorTransactions::TYPE_CREATE:
+        return pht(
+          '%s created this paste.',
+          $this->renderHandleLink($author_phid));
+      case self::TYPE_CONTENT:
         if ($old === null) {
           return pht(
             '%s created this paste.',
@@ -74,17 +95,30 @@ final class PhabricatorPasteTransaction
             $this->renderHandleLink($author_phid));
         }
         break;
-      case PhabricatorPasteTransaction::TYPE_TITLE:
+      case self::TYPE_TITLE:
         return pht(
           '%s updated the paste\'s title to "%s".',
           $this->renderHandleLink($author_phid),
           $new);
         break;
-      case PhabricatorPasteTransaction::TYPE_LANGUAGE:
+      case self::TYPE_LANGUAGE:
         return pht(
           "%s updated the paste's language.",
           $this->renderHandleLink($author_phid));
         break;
+      case self::TYPE_STATUS:
+        switch ($new) {
+          case PhabricatorPaste::STATUS_ACTIVE:
+            return pht(
+              '%s activated this paste.',
+              $this->renderHandleLink($author_phid));
+          case PhabricatorPaste::STATUS_ARCHIVED:
+            return pht(
+              '%s archived this paste.',
+              $this->renderHandleLink($author_phid));
+        }
+        break;
+
     }
 
     return parent::getTitle();
@@ -99,7 +133,7 @@ final class PhabricatorPasteTransaction
 
     $type = $this->getTransactionType();
     switch ($type) {
-      case PhabricatorPasteTransaction::TYPE_CONTENT:
+      case self::TYPE_CONTENT:
         if ($old === null) {
           return pht(
             '%s created %s.',
@@ -112,17 +146,31 @@ final class PhabricatorPasteTransaction
             $this->renderHandleLink($object_phid));
         }
         break;
-      case PhabricatorPasteTransaction::TYPE_TITLE:
+      case self::TYPE_TITLE:
         return pht(
           '%s updated the title for %s.',
           $this->renderHandleLink($author_phid),
           $this->renderHandleLink($object_phid));
         break;
-      case PhabricatorPasteTransaction::TYPE_LANGUAGE:
+      case self::TYPE_LANGUAGE:
         return pht(
-          '%s update the language for %s.',
+          '%s updated the language for %s.',
           $this->renderHandleLink($author_phid),
           $this->renderHandleLink($object_phid));
+        break;
+      case self::TYPE_STATUS:
+        switch ($new) {
+          case PhabricatorPaste::STATUS_ACTIVE:
+            return pht(
+              '%s activated %s.',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink($object_phid));
+          case PhabricatorPaste::STATUS_ARCHIVED:
+            return pht(
+              '%s archived %s.',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink($object_phid));
+        }
         break;
     }
 
@@ -136,6 +184,14 @@ final class PhabricatorPasteTransaction
     switch ($this->getTransactionType()) {
       case self::TYPE_CONTENT:
         return PhabricatorTransactions::COLOR_GREEN;
+      case self::TYPE_STATUS:
+        switch ($new) {
+          case PhabricatorPaste::STATUS_ACTIVE:
+            return 'green';
+          case PhabricatorPaste::STATUS_ARCHIVED:
+            return 'indigo';
+        }
+      break;
     }
 
     return parent::getColor();
@@ -180,6 +236,24 @@ final class PhabricatorPasteTransaction
     }
 
     return parent::renderChangeDetails($viewer);
+  }
+
+  public function getMailTags() {
+    $tags = array();
+    switch ($this->getTransactionType()) {
+      case self::TYPE_TITLE:
+      case self::TYPE_CONTENT:
+      case self::TYPE_LANGUAGE:
+        $tags[] = self::MAILTAG_CONTENT;
+        break;
+      case PhabricatorTransactions::TYPE_COMMENT:
+        $tags[] = self::MAILTAG_COMMENT;
+        break;
+      default:
+        $tags[] = self::MAILTAG_OTHER;
+        break;
+    }
+    return $tags;
   }
 
 }

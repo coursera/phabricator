@@ -6,24 +6,23 @@ final class DiffusionCommitTagsController extends DiffusionController {
     return true;
   }
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $drequest = $this->getDiffusionRequest();
-    $tag_limit = 10;
-
-    $tags = array();
-    try {
-      $tags = DiffusionRepositoryTag::newFromConduit(
-        $this->callConduitWithDiffusionRequest(
-          'diffusion.tagsquery',
-          array(
-            'commit' => $drequest->getCommit(),
-            'limit' => $tag_limit + 1,
-          )));
-    } catch (ConduitException $ex) {
-      if ($ex->getMessage() != 'ERR-UNSUPPORTED-VCS') {
-        throw $ex;
-      }
+  public function handleRequest(AphrontRequest $request) {
+    $response = $this->loadDiffusionContext();
+    if ($response) {
+      return $response;
     }
+
+    $drequest = $this->getDiffusionRequest();
+    $repository = $drequest->getRepository();
+
+    $tag_limit = 10;
+    $tags = DiffusionRepositoryTag::newFromConduit(
+      $this->callConduitWithDiffusionRequest(
+        'diffusion.tagsquery',
+        array(
+          'commit' => $drequest->getCommit(),
+          'limit' => $tag_limit + 1,
+        )));
 
     $has_more_tags = (count($tags) > $tag_limit);
     $tags = array_slice($tags, 0, $tag_limit);

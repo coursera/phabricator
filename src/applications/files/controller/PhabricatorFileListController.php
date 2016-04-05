@@ -2,27 +2,23 @@
 
 final class PhabricatorFileListController extends PhabricatorFileController {
 
-  private $key;
-
   public function shouldAllowPublic() {
     return true;
   }
 
-  public function willProcessRequest(array $data) {
-    $this->key = idx($data, 'key');
+  public function isGlobalDragAndDropUploadEnabled() {
+    return true;
   }
 
-  public function processRequest() {
-    $controller = id(new PhabricatorApplicationSearchController())
-      ->setQueryKey($this->key)
-      ->setSearchEngine(new PhabricatorFileSearchEngine())
-      ->setNavigation($this->buildSideNavView());
-
-    return $this->delegateToController($controller);
+  public function handleRequest(AphrontRequest $request) {
+    return id(new PhabricatorFileSearchEngine())
+      ->setController($this)
+      ->buildResponse();
   }
 
   protected function buildApplicationCrumbs() {
     $crumbs = parent::buildApplicationCrumbs();
+
     $crumbs->addAction(
       id(new PHUIListItemView())
         ->setName(pht('Upload File'))

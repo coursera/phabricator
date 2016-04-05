@@ -3,73 +3,66 @@
 final class PhabricatorAphrontBarUIExample extends PhabricatorUIExample {
 
   public function getName() {
-    return 'Bars';
+    return pht('Bars');
   }
 
   public function getDescription() {
-    return 'Like fractions, but more horizontal.';
+    return pht('Like fractions, but more horizontal.');
   }
 
   public function renderExample() {
-    $out = '';
-    $out .= $this->renderTestThings('AphrontProgressBarView', 13, 10);
-    $out .= $this->renderTestThings('AphrontGlyphBarView', 13, 10);
-    $out .= $this->renderWeirdOrderGlyphBars();
-    $out .= $this->renderAsciiStarBar();
-    return phutil_safe_html($out);
+    $out = array();
+    $out[] = $this->renderRainbow();
+    return $out;
   }
 
   private function wrap($title, $thing) {
-    return id(new AphrontPanelView())
-      ->setHeader($title)
-      ->appendChild($thing)
-      ->render();
+    $thing = phutil_tag_div('ml grouped', $thing);
+    return id(new PHUIObjectBoxView())
+      ->setHeaderText($title)
+      ->appendChild($thing);
   }
 
-  private function renderTestThings($class, $max, $incr) {
+  private function renderRainbow() {
+    $colors = array(
+      'red',
+      'orange',
+      'yellow',
+      'green',
+      'blue',
+      'indigo',
+      'violet',
+    );
+
+    $labels = array(
+      pht('Empty'),
+      pht('Red'),
+      pht('Orange'),
+      pht('Yellow'),
+      pht('Green'),
+      pht('Blue'),
+      pht('Indigo'),
+      pht('Violet'),
+    );
+
     $bars = array();
-    for ($ii = 0; $ii <= $max; $ii++) {
-      $bars[] = newv($class, array())
-        ->setValue($ii * $incr)
-        ->setMax($max * $incr)
-        ->setCaption("{$ii} outta {$max} ain't bad!");
-    }
-    return $this->wrap(
-      "Test {$class}",
-      phutil_implode_html('', mpull($bars, 'render')));
-  }
 
-  private function renderWeirdOrderGlyphBars() {
-    $views = array();
-    $indices = array(1, 3, 7, 4, 2, 8, 9, 5, 10, 6);
-    $max = count($indices);
-    foreach ($indices as $index) {
-      $views[] = id(new AphrontGlyphBarView())
-        ->setValue($index)
-        ->setMax($max)
-        ->setNumGlyphs(5)
-        ->setCaption("Lol score is {$index}/{$max}")
-        ->setGlyph(hsprintf('%s', 'LOL!'))
-        ->setBackgroundGlyph(hsprintf('%s', '____'))
-        ->render();
-      $views[] = hsprintf('<div style="clear:both;"></div>');
+    for ($jj = -1; $jj < count($colors); $jj++) {
+      $bar = id(new PHUISegmentBarView())
+        ->setLabel($labels[$jj + 1]);
+      for ($ii = 0; $ii <= $jj; $ii++) {
+        $bar->newSegment()
+          ->setWidth(1 / 7)
+          ->setColor($colors[$ii]);
+      }
+      $bars[] = $bar;
     }
 
-    return $this->wrap(
-      'Glyph bars in weird order',
-      phutil_implode_html('', $views));
-  }
+    $bars = phutil_implode_html(
+      phutil_tag('br'),
+      $bars);
 
-  private function renderAsciiStarBar() {
-    return $this->wrap(
-      'Ascii star glyph bar',
-      id(new AphrontGlyphBarView())
-        ->setValue(50)
-        ->setMax(100)
-        ->setCaption('Glyphs!')
-        ->setNumGlyphs(10)
-        ->setGlyph(hsprintf('%s', '*'))
-        ->render());
+    return $this->wrap(pht('Rainbow Bars'), $bars);
   }
 
 }

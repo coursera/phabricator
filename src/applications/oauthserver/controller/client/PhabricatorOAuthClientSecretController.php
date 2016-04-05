@@ -8,7 +8,7 @@ final class PhabricatorOAuthClientSecretController
 
     $client = id(new PhabricatorOAuthServerClientQuery())
       ->setViewer($viewer)
-      ->withPHIDs(array($this->getClientPHID()))
+      ->withIDs(array($request->getURIData('id')))
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -27,22 +27,20 @@ final class PhabricatorOAuthClientSecretController
 
     if ($request->isFormPost()) {
       $secret = $client->getSecret();
+
       $body = id(new PHUIFormLayoutView())
         ->appendChild(
           id(new AphrontFormTextAreaControl())
-          ->setLabel(pht('Plaintext'))
-          ->setReadOnly(true)
-          ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_SHORT)
-          ->setValue($secret));
+            ->setLabel(pht('Plaintext'))
+            ->setReadOnly(true)
+            ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_SHORT)
+            ->setValue($secret));
 
-      $dialog = id(new AphrontDialogView())
-        ->setUser($viewer)
+      return $this->newDialog()
         ->setWidth(AphrontDialogView::WIDTH_FORM)
         ->setTitle(pht('Application Secret'))
         ->appendChild($body)
         ->addCancelButton($view_uri, pht('Done'));
-
-      return id(new AphrontDialogResponse())->setDialog($dialog);
     }
 
 
@@ -50,17 +48,17 @@ final class PhabricatorOAuthClientSecretController
 
     if ($is_serious) {
       $body = pht(
-        'The secret associated with this oauth application will be shown in '.
+        'The secret associated with this OAuth application will be shown in '.
         'plain text on your screen.');
     } else {
       $body = pht(
-        'The secret associated with this oauth application will be shown in '.
+        'The secret associated with this OAuth application will be shown in '.
         'plain text on your screen. Before continuing, wrap your arms around '.
         'your monitor to create a human shield, keeping it safe from prying '.
         'eyes. Protect company secrets!');
     }
+
     return $this->newDialog()
-      ->setUser($viewer)
       ->setTitle(pht('Really show application secret?'))
       ->appendChild($body)
       ->addSubmitButton(pht('Show Application Secret'))

@@ -13,7 +13,7 @@ final class PhabricatorIconRemarkupRule extends PhutilRemarkupRule {
       $text);
   }
 
-  public function markupIcon($matches) {
+  public function markupIcon(array $matches) {
     $engine = $this->getEngine();
     $text_mode = $engine->isTextMode();
     $mail_mode = $engine->isHTMLMailMode();
@@ -41,6 +41,7 @@ final class PhabricatorIconRemarkupRule extends PhutilRemarkupRule {
 
     $defaults = array(
       'color' => null,
+      'spin' => false,
     );
 
     $options = idx($extra, 1, '');
@@ -53,12 +54,12 @@ final class PhabricatorIconRemarkupRule extends PhutilRemarkupRule {
 
     static $icon_names;
     if (!$icon_names) {
-      $icon_names = array_fuse(PHUIIconView::getFontIcons());
+      $icon_names = array_fuse(PHUIIconView::getIcons());
     }
 
     static $color_names;
     if (!$color_names) {
-      $color_names = array_fuse(PHUIIconView::getFontIconColors());
+      $color_names = array_fuse(PHUIIconView::getIconColors());
     }
 
     if (empty($icon_names['fa-'.$icon])) {
@@ -70,9 +71,16 @@ final class PhabricatorIconRemarkupRule extends PhutilRemarkupRule {
       $color = null;
     }
 
-    $icon_view = id(new PHUIIconView())
-      ->setIconFont('fa-'.$icon, $color);
+    $classes = array();
+    $classes[] = $color;
 
+    $spin = $options['spin'];
+    if ($spin) {
+      $classes[] = 'ph-spin';
+    }
+
+    $icon_view = id(new PHUIIconView())
+      ->setIcon('fa-'.$icon, implode(' ', $classes));
 
     return $this->getEngine()->storeText($icon_view);
   }

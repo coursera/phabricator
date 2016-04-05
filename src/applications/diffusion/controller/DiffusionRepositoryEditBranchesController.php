@@ -3,24 +3,15 @@
 final class DiffusionRepositoryEditBranchesController
   extends DiffusionRepositoryEditController {
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-    $drequest = $this->diffusionRequest;
-    $repository = $drequest->getRepository();
-
-    $repository = id(new PhabricatorRepositoryQuery())
-      ->setViewer($viewer)
-      ->requireCapabilities(
-        array(
-          PhabricatorPolicyCapability::CAN_VIEW,
-          PhabricatorPolicyCapability::CAN_EDIT,
-        ))
-      ->withIDs(array($repository->getID()))
-      ->executeOne();
-    if (!$repository) {
-      return new Aphront404Response();
+  public function handleRequest(AphrontRequest $request) {
+    $response = $this->loadDiffusionContextForEdit();
+    if ($response) {
+      return $response;
     }
+
+    $viewer = $this->getViewer();
+    $drequest = $this->getDiffusionRequest();
+    $repository = $drequest->getRepository();
 
     $is_git = false;
     $is_hg = false;
@@ -107,6 +98,9 @@ final class DiffusionRepositoryEditBranchesController
     $crumbs->addTextCrumb(pht('Edit Branches'));
 
     $title = pht('Edit Branches (%s)', $repository->getName());
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon('fa-pencil');
 
     $policies = id(new PhabricatorPolicyQuery())
       ->setViewer($viewer)
@@ -126,20 +120,20 @@ final class DiffusionRepositoryEditBranchesController
         'develop',
         'release',
       ),
-      pht('Select master, develop, and release.'),
+      pht('Select %s, %s, and %s.', 'master', 'develop', 'release'),
     );
     $rows[] = array(
       array(
         'master',
         'regexp(/^release-/)',
       ),
-      pht('Select master, and all branches which start with "release-".'),
+      pht('Select master, and all branches which start with "%s".', 'release-'),
     );
     $rows[] = array(
       array(
         'regexp(/^(?!temp-)/)',
       ),
-      pht('Select all branches which do not start with "temp-".'),
+      pht('Select all branches which do not start with "%s".', 'temp-'),
     );
 
     foreach ($rows as $k => $row) {
@@ -167,8 +161,7 @@ final class DiffusionRepositoryEditBranchesController
     $form = id(new AphrontFormView())
       ->setUser($viewer)
       ->appendRemarkupInstructions(
-        pht(
-          'You can choose a **Default Branch** for viewing this repository.'))
+        pht('You can choose a **Default Branch** for viewing this repository.'))
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setName('default')
@@ -196,7 +189,8 @@ final class DiffusionRepositoryEditBranchesController
         pht(
           'When specifying branches, you should enter one branch name per '.
           'line. You can use regular expressions to match branches by '.
-          'wrapping an expression in `regexp(...)`. For example:'))
+          'wrapping an expression in `%s`. For example:',
+          'regexp(...)'))
       ->appendChild(
         id(new AphrontFormMarkupControl())
           ->setValue($example_table))
@@ -222,18 +216,21 @@ final class DiffusionRepositoryEditBranchesController
         ->addCancelButton($edit_uri));
 
     $form_box = id(new PHUIObjectBoxView())
+      ->setHeaderText(pht('Branches'))
       ->setValidationException($validation_exception)
-      ->setHeaderText($title)
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $form_box,
-      ),
-      array(
-        'title' => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
   private function processBranches($string) {

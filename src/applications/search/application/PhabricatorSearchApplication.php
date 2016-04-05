@@ -18,7 +18,7 @@ final class PhabricatorSearchApplication extends PhabricatorApplication {
     return pht('Find stuff in big piles.');
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-search';
   }
 
@@ -32,10 +32,10 @@ final class PhabricatorSearchApplication extends PhabricatorApplication {
         '(?:query/(?P<queryKey>[^/]+)/)?' => 'PhabricatorSearchController',
         'attach/(?P<phid>[^/]+)/(?P<type>\w+)/(?:(?P<action>\w+)/)?'
           => 'PhabricatorSearchAttachController',
-        'select/(?P<type>\w+)/'
+        'select/(?P<type>\w+)/(?:(?P<action>\w+)/)?'
           => 'PhabricatorSearchSelectController',
         'index/(?P<phid>[^/]+)/' => 'PhabricatorSearchIndexController',
-        'hovercard/(?P<mode>retrieve|test)/'
+        'hovercard/'
           => 'PhabricatorSearchHovercardController',
         'edit/(?P<queryKey>[^/]+)/' => 'PhabricatorSearchEditController',
         'delete/(?P<queryKey>[^/]+)/(?P<engine>[^/]+)/'

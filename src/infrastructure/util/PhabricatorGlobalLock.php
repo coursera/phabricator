@@ -28,7 +28,6 @@
  */
 final class PhabricatorGlobalLock extends PhutilLock {
 
-  private $lockname;
   private $conn;
 
   private static $pool = array();
@@ -39,16 +38,43 @@ final class PhabricatorGlobalLock extends PhutilLock {
 
   public static function newLock($name) {
     $namespace = PhabricatorLiskDAO::getStorageNamespace();
-    $full_name = 'global:'.$namespace.':'.$name;
+    $namespace = PhabricatorHash::digestToLength($namespace, 20);
+
+    $full_name = 'ph:'.$namespace.':'.$name;
+
+    $length_limit = 64;
+    if (strlen($full_name) > $length_limit) {
+      throw new Exception(
+        pht(
+          'Lock name "%s" is too long (full lock name is "%s"). The '.
+          'full lock name must not be longer than %s bytes.',
+          $name,
+          $full_name,
+          new PhutilNumber($length_limit)));
+    }
 
     $lock = self::getLock($full_name);
     if (!$lock) {
       $lock = new PhabricatorGlobalLock($full_name);
-      $lock->lockname = $name;
       self::registerLock($lock);
     }
 
     return $lock;
+  }
+
+  /**
+   * Use a specific database connection for locking.
+   *
+   * By default, `PhabricatorGlobalLock` will lock on the "repository" database
+   * (somewhat arbitrarily). In most cases this is fine, but this method can
+   * be used to lock on a specific connection.
+   *
+   * @param  AphrontDatabaseConnection
+   * @return this
+   */
+  public function useSpecificConnection(AphrontDatabaseConnection $conn) {
+    $this->conn = $conn;
+    return $this;
   }
 
 
@@ -75,18 +101,18 @@ final class PhabricatorGlobalLock extends PhutilLock {
       // NOTE: Using "force_new" to make sure each lock is on its own
       // connection.
       $conn = $dao->establishConnection('w', $force_new = true);
-
-      // NOTE: Since MySQL will disconnect us if we're idle for too long, we set
-      // the wait_timeout to an enormous value, to allow us to hold the
-      // connection open indefinitely (or, at least, for 24 days).
-      $max_allowed_timeout = 2147483;
-      queryfx($conn, 'SET wait_timeout = %d', $max_allowed_timeout);
     }
+
+    // NOTE: Since MySQL will disconnect us if we're idle for too long, we set
+    // the wait_timeout to an enormous value, to allow us to hold the
+    // connection open indefinitely (or, at least, for 24 days).
+    $max_allowed_timeout = 2147483;
+    queryfx($conn, 'SET wait_timeout = %d', $max_allowed_timeout);
 
     $result = queryfx_one(
       $conn,
       'SELECT GET_LOCK(%s, %f)',
-      'phabricator:'.$this->lockname,
+      $this->getName(),
       $wait);
 
     $ok = head($result);
@@ -101,7 +127,7 @@ final class PhabricatorGlobalLock extends PhutilLock {
     queryfx(
       $this->conn,
       'SELECT RELEASE_LOCK(%s)',
-      'phabricator:'.$this->lockname);
+      $this->getName());
 
     $this->conn->close();
     self::$pool[] = $this->conn;

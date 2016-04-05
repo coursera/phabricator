@@ -3,9 +3,14 @@
 final class DiffusionMirrorEditController
   extends DiffusionController {
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $viewer = $request->getUser();
-    $drequest = $this->diffusionRequest;
+  public function handleRequest(AphrontRequest $request) {
+    $response = $this->loadDiffusionContext();
+    if ($response) {
+      return $response;
+    }
+
+    $viewer = $this->getViewer();
+    $drequest = $this->getDiffusionRequest();
     $repository = $drequest->getRepository();
 
     PhabricatorPolicyFilter::requireCapability(
@@ -84,7 +89,7 @@ final class DiffusionMirrorEditController
 
     $form_errors = null;
     if ($errors) {
-      $form_errors = id(new AphrontErrorView())
+      $form_errors = id(new PHUIInfoView())
         ->setErrors($errors);
     }
 
@@ -112,17 +117,13 @@ final class DiffusionMirrorEditController
           ->setError($e_credentials)
           ->setOptions($credentials));
 
-    $dialog = id(new AphrontDialogView())
-      ->setUser($viewer)
+    return $this->newDialog()
       ->setTitle($title)
       ->setWidth(AphrontDialogView::WIDTH_FORM)
       ->appendChild($form_errors)
       ->appendChild($form)
       ->addSubmitButton($submit)
       ->addCancelButton($edit_uri);
-
-    return id(new AphrontDialogResponse())
-      ->setDialog($dialog);
   }
 
 

@@ -23,6 +23,7 @@ final class FundInitiativeEditor
     $types[] = FundInitiativeTransaction::TYPE_MERCHANT;
     $types[] = PhabricatorTransactions::TYPE_VIEW_POLICY;
     $types[] = PhabricatorTransactions::TYPE_EDIT_POLICY;
+    $types[] = PhabricatorTransactions::TYPE_COMMENT;
 
     return $types;
   }
@@ -102,11 +103,6 @@ final class FundInitiativeEditor
 
         $object->setTotalAsCurrency($total);
         return;
-      case PhabricatorTransactions::TYPE_SUBSCRIBERS:
-      case PhabricatorTransactions::TYPE_EDGE:
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
-        return;
     }
 
     return parent::applyCustomInternalTransaction($object, $xaction);
@@ -131,7 +127,7 @@ final class FundInitiativeEditor
           ->withPHIDs(array($xaction->getNewValue()))
           ->executeOne();
         if (!$backer) {
-          throw new Exception(pht('Unable to load FundBacker!'));
+          throw new Exception(pht('Unable to load %s!', 'FundBacker'));
         }
 
         $subx = array();
@@ -155,11 +151,6 @@ final class FundInitiativeEditor
           ->setContinueOnNoEffect(true);
 
         $editor->applyTransactions($backer, $subx);
-        return;
-      case PhabricatorTransactions::TYPE_SUBSCRIBERS:
-      case PhabricatorTransactions::TYPE_EDGE:
-      case PhabricatorTransactions::TYPE_VIEW_POLICY:
-      case PhabricatorTransactions::TYPE_EDIT_POLICY:
         return;
     }
 

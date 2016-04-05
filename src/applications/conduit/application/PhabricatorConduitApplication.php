@@ -6,7 +6,7 @@ final class PhabricatorConduitApplication extends PhabricatorApplication {
     return '/conduit/';
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-tty';
   }
 
@@ -14,8 +14,13 @@ final class PhabricatorConduitApplication extends PhabricatorApplication {
     return false;
   }
 
-  public function getHelpURI() {
-    return PhabricatorEnv::getDoclink('Conduit Technical Documentation');
+  public function getHelpDocumentationArticles(PhabricatorUser $viewer) {
+    return array(
+      array(
+        'name' => pht('Conduit API Overview'),
+        'href' => PhabricatorEnv::getDoclink('Conduit API Overview'),
+      ),
+    );
   }
 
   public function getName() {
@@ -43,7 +48,8 @@ final class PhabricatorConduitApplication extends PhabricatorApplication {
       '/conduit/' => array(
         '(?:query/(?P<queryKey>[^/]+)/)?' => 'PhabricatorConduitListController',
         'method/(?P<method>[^/]+)/' => 'PhabricatorConduitConsoleController',
-        'log/' => 'PhabricatorConduitLogController',
+        'log/(?:query/(?P<queryKey>[^/]+)/)?' =>
+          'PhabricatorConduitLogController',
         'log/view/(?P<view>[^/]+)/' => 'PhabricatorConduitLogController',
         'token/' => 'PhabricatorConduitTokenController',
         'token/edit/(?:(?P<id>\d+)/)?' =>

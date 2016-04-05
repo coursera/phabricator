@@ -26,7 +26,7 @@ final class PhabricatorPeopleLdapController
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel(pht('LDAP query'))
-          ->setCaption(pht('A filter such as (objectClass=*)'))
+          ->setCaption(pht('A filter such as %s.', '(objectClass=*)'))
           ->setName('query'))
       ->appendChild(
         id(new AphrontFormSubmitControl())
@@ -42,7 +42,6 @@ final class PhabricatorPeopleLdapController
       $this->getApplicationURI('/ldap/'));
 
     $nav = $this->buildSideNavView();
-    $nav->setCrumbs($crumbs);
     $nav->selectFilter('ldap');
     $nav->appendChild($content);
 
@@ -56,11 +55,10 @@ final class PhabricatorPeopleLdapController
       $nav->appendChild($this->processSearchRequest($request));
     }
 
-    return $this->buildApplicationPage(
-      $nav,
-      array(
-        'title'  => pht('Import Ldap Users'),
-      ));
+    return $this->newPage()
+      ->setTitle(pht('Import Ldap Users'))
+      ->setCrumbs($crumbs)
+      ->setNavigation($nav);
   }
 
   private function processImportRequest($request) {
@@ -69,8 +67,8 @@ final class PhabricatorPeopleLdapController
     $emails = $request->getArr('email');
     $names = $request->getArr('name');
 
-    $notice_view = new AphrontErrorView();
-    $notice_view->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+    $notice_view = new PHUIInfoView();
+    $notice_view->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
     $notice_view->setTitle(pht('Import Successful'));
     $notice_view->setErrors(array(
       pht('Successfully imported users from LDAP'),
@@ -101,17 +99,17 @@ final class PhabricatorPeopleLdapController
 
         $header = pht('Successfully added %s', $username);
         $attribute = null;
-        $color = 'green';
+        $color = 'fa-check green';
       } catch (Exception $ex) {
         $header = pht('Failed to add %s', $username);
         $attribute = $ex->getMessage();
-        $color = 'red';
+        $color = 'fa-times red';
       }
 
       $item = id(new PHUIObjectItemView())
         ->setHeader($header)
         ->addAttribute($attribute)
-        ->setBarColor($color);
+        ->setStatusIcon($color);
 
       $list->addItem($item);
     }
@@ -124,14 +122,14 @@ final class PhabricatorPeopleLdapController
   }
 
   private function processSearchRequest($request) {
-    $panel = new AphrontPanelView();
+    $panel = new PHUIBoxView();
     $admin = $request->getUser();
 
     $search = $request->getStr('query');
 
     $ldap_provider = PhabricatorLDAPAuthProvider::getLDAPProvider();
     if (!$ldap_provider) {
-      throw new Exception('No LDAP provider enabled!');
+      throw new Exception(pht('No LDAP provider enabled!'));
     }
 
     $ldap_adapter = $ldap_provider->getAdapter();

@@ -18,6 +18,10 @@ final class PhortuneSubscriptionEditController extends PhortuneController {
       return new Aphront404Response();
     }
 
+    id(new PhabricatorAuthSessionEngine())->requireHighSecuritySession(
+      $viewer,
+      $request,
+      $subscription->getURI());
     $merchant = $subscription->getMerchant();
     $account = $subscription->getAccount();
 
@@ -31,6 +35,11 @@ final class PhortuneSubscriptionEditController extends PhortuneController {
     $valid_methods = id(new PhortunePaymentMethodQuery())
       ->setViewer($viewer)
       ->withAccountPHIDs(array($account->getPHID()))
+      ->withStatuses(
+        array(
+          PhortunePaymentMethod::STATUS_ACTIVE,
+        ))
+      ->withMerchantPHIDs(array($merchant->getPHID()))
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -99,6 +108,20 @@ final class PhortuneSubscriptionEditController extends PhortuneController {
       $view_uri);
     $crumbs->addTextCrumb(pht('Edit'));
 
+
+    $uri = $this->getApplicationURI($account->getID().'/card/new/');
+    $uri = new PhutilURI($uri);
+    $uri->setQueryParam('merchantID', $merchant->getID());
+    $uri->setQueryParam('subscriptionID', $subscription->getID());
+
+    $add_method_button = phutil_tag(
+      'a',
+      array(
+        'href' => $uri,
+        'class' => 'button grey',
+      ),
+      pht('Add Payment Method...'));
+
     $form = id(new AphrontFormView())
       ->setUser($viewer)
       ->appendChild(
@@ -108,24 +131,35 @@ final class PhortuneSubscriptionEditController extends PhortuneController {
           ->setValue($current_phid)
           ->setOptions($options))
       ->appendChild(
+        id(new AphrontFormMarkupControl())
+          ->setValue($add_method_button))
+      ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue(pht('Save Changes'))
           ->addCancelButton($view_uri));
 
     $box = id(new PHUIObjectBoxView())
       ->setUser($viewer)
-      ->setHeaderText(pht('Edit %s', $subscription->getSubscriptionName()))
+      ->setHeaderText(pht('Subscription'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setFormErrors($errors)
       ->appendChild($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Edit %s', $subscription->getSubscriptionName()))
+      ->setHeaderIcon('fa-pencil');
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $box,
-      ),
-      array(
-        'title' => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
+
   }
 
 

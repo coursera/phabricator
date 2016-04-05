@@ -1,6 +1,6 @@
 <?php
 
-final class PhabricatorStorageManagementAPI {
+final class PhabricatorStorageManagementAPI extends Phobject {
 
   private $host;
   private $user;
@@ -11,10 +11,13 @@ final class PhabricatorStorageManagementAPI {
   private $disableUTF8MB4;
 
   const CHARSET_DEFAULT = 'CHARSET';
+  const CHARSET_SORT = 'CHARSET_SORT';
   const CHARSET_FULLTEXT = 'CHARSET_FULLTEXT';
   const COLLATE_TEXT = 'COLLATE_TEXT';
   const COLLATE_SORT = 'COLLATE_SORT';
   const COLLATE_FULLTEXT = 'COLLATE_FULLTEXT';
+
+  const TABLE_STATUS = 'patch_status';
 
   public function setDisableUTF8MB4($disable_utf8_mb4) {
     $this->disableUTF8MB4 = $disable_utf8_mb4;
@@ -117,10 +120,33 @@ final class PhabricatorStorageManagementAPI {
     try {
       $applied = queryfx_all(
         $this->getConn('meta_data'),
-        'SELECT patch FROM patch_status');
+        'SELECT patch FROM %T',
+        self::TABLE_STATUS);
       return ipull($applied, 'patch');
+    } catch (AphrontAccessDeniedQueryException $ex) {
+      throw new PhutilProxyException(
+        pht(
+          'Failed while trying to read schema status: the database "%s" '.
+          'exists, but the current user ("%s") does not have permission to '.
+          'access it. GRANT the current user more permissions, or use a '.
+          'different user.',
+          $this->getDatabaseName('meta_data'),
+          $this->getUser()),
+        $ex);
     } catch (AphrontQueryException $ex) {
       return null;
+    }
+  }
+
+  public function getPatchDurations() {
+    try {
+      $rows = queryfx_all(
+        $this->getConn('meta_data'),
+        'SELECT patch, duration FROM %T WHERE duration IS NOT NULL',
+        self::TABLE_STATUS);
+      return ipull($rows, 'duration', 'patch');
+    } catch (AphrontQueryException $ex) {
+      return array();
     }
   }
 
@@ -167,13 +193,30 @@ final class PhabricatorStorageManagementAPI {
     return $legacy;
   }
 
-  public function markPatchApplied($patch) {
+  public function markPatchApplied($patch, $duration = null) {
+    $conn = $this->getConn('meta_data');
+
     queryfx(
-      $this->getConn('meta_data'),
+      $conn,
       'INSERT INTO %T (patch, applied) VALUES (%s, %d)',
-      'patch_status',
+      self::TABLE_STATUS,
       $patch,
       time());
+
+    // We didn't add this column for a long time, so it may not exist yet.
+    if ($duration !== null) {
+      try {
+        queryfx(
+          $conn,
+          'UPDATE %T SET duration = %d WHERE patch = %s',
+          self::TABLE_STATUS,
+          (int)floor($duration * 1000000),
+          $patch);
+      } catch (AphrontQueryException $ex) {
+        // Just ignore this, as it almost certainly indicates that we just
+        // don't have the column yet.
+      }
+    }
   }
 
   public function applyPatch(PhabricatorStoragePatch $patch) {
@@ -190,7 +233,7 @@ final class PhabricatorStorageManagementAPI {
         $this->applyPatchPHP($name);
         break;
       default:
-        throw new Exception("Unable to apply patch of type '{$type}'.");
+        throw new Exception(pht("Unable to apply patch of type '%s'.", $type));
     }
   }
 
@@ -213,10 +256,19 @@ final class PhabricatorStorageManagementAPI {
         $query = str_replace('{$'.$key.'}', $value, $query);
       }
 
-      queryfx(
-        $conn,
-        '%Q',
-        $query);
+      try {
+        queryfx($conn, '%Q', $query);
+      } catch (AphrontAccessDeniedQueryException $ex) {
+        throw new PhutilProxyException(
+          pht(
+            'Unable to access a required database or table. This almost '.
+            'always means that the user you are connecting with ("%s") does '.
+            'not have sufficient permissions granted in MySQL. You can '.
+            'use `bin/storage databases` to get a list of all databases '.
+            'permission is required on.',
+            $this->getUser()),
+          $ex);
+      }
     }
   }
 
@@ -233,7 +285,12 @@ final class PhabricatorStorageManagementAPI {
     }
 
     $conn = $this->getConn(null);
+    return self::isCharacterSetAvailableOnConnection($character_set, $conn);
+  }
 
+  public static function isCharacterSetAvailableOnConnection(
+    $character_set,
+    AphrontDatabaseConnection $conn) {
     $result = queryfx_one(
       $conn,
       'SELECT CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.CHARACTER_SETS
@@ -249,34 +306,45 @@ final class PhabricatorStorageManagementAPI {
       // collation. This is most correct, and will sort properly.
 
       $charset = 'utf8mb4';
+      $charset_sort = 'utf8mb4';
       $charset_full = 'utf8mb4';
       $collate_text = 'utf8mb4_bin';
       $collate_sort = 'utf8mb4_unicode_ci';
       $collate_full = 'utf8mb4_unicode_ci';
     } else {
-      // If utf8mb4 is not available, we use binary. This allows us to store
-      // 4-byte unicode characters. This has some tradeoffs:
-      //
-      // Unicode characters won't sort correctly. There's nothing we can do
-      // about this while still supporting 4-byte characters.
+      // If utf8mb4 is not available, we use binary for most data. This allows
+      // us to store 4-byte unicode characters.
       //
       // It's possible that strings will be truncated in the middle of a
       // character on insert. We encourage users to set STRICT_ALL_TABLES
       // to prevent this.
       //
-      // There's no valid collation we can use to get a fulltext index on
-      // 4-byte unicode characters: we can't add a fulltext key to a binary
-      // column.
+      // For "fulltext" and "sort" columns, we don't use binary.
+      //
+      // With "fulltext", we can not use binary because MySQL won't let us.
+      // We use 3-byte utf8 instead and accept being unable to index 4-byte
+      // characters.
+      //
+      // With "sort", if we use binary we lose case insensitivity (for
+      // example, "ALincoln@logcabin.com" and "alincoln@logcabin.com" would no
+      // longer be identified as the same email address). This can be very
+      // confusing and is far worse overall than not supporting 4-byte unicode
+      // characters, so we use 3-byte utf8 and accept limited 4-byte support as
+      // a tradeoff to get sensible collation behavior. Many columns where
+      // collation is important rarely contain 4-byte characters anyway, so we
+      // are not giving up too much.
 
       $charset = 'binary';
+      $charset_sort = 'utf8';
       $charset_full = 'utf8';
       $collate_text = 'binary';
-      $collate_sort = 'binary';
+      $collate_sort = 'utf8_general_ci';
       $collate_full = 'utf8_general_ci';
     }
 
     return array(
       self::CHARSET_DEFAULT => $charset,
+      self::CHARSET_SORT => $charset_sort,
       self::CHARSET_FULLTEXT => $charset_full,
       self::COLLATE_TEXT => $collate_text,
       self::COLLATE_SORT => $collate_sort,

@@ -7,24 +7,35 @@ abstract class PhabricatorApplicationTransactionQuery
   private $objectPHIDs;
   private $authorPHIDs;
   private $transactionTypes;
-  private $reversePaging = true;
 
   private $needComments = true;
   private $needHandles  = true;
+
+  final public static function newQueryForObject(
+    PhabricatorApplicationTransactionInterface $object) {
+
+    $xaction = $object->getApplicationTransactionTemplate();
+    $target_class = get_class($xaction);
+
+    $queries = id(new PhutilClassMapQuery())
+      ->setAncestorClass(__CLASS__)
+      ->execute();
+    foreach ($queries as $query) {
+      $query_xaction = $query->getTemplateApplicationTransaction();
+      $query_class = get_class($query_xaction);
+
+      if ($query_class === $target_class) {
+        return id(clone $query);
+      }
+    }
+
+    return null;
+  }
 
   abstract public function getTemplateApplicationTransaction();
 
   protected function buildMoreWhereClauses(AphrontDatabaseConnection $conn_r) {
     return array();
-  }
-
-  public function setReversePaging($bool) {
-    $this->reversePaging = $bool;
-    return $this;
-  }
-
-  protected function getReversePaging() {
-    return $this->reversePaging;
   }
 
   public function withPHIDs(array $phids) {
@@ -80,11 +91,12 @@ abstract class PhabricatorApplicationTransactionQuery
 
       $comments = array();
       if ($comment_phids) {
-        $comments = id(new PhabricatorApplicationTransactionCommentQuery())
-          ->setTemplate($table->getApplicationTransactionCommentObject())
-          ->setViewer($this->getViewer())
-          ->withPHIDs($comment_phids)
-          ->execute();
+        $comments =
+          id(new PhabricatorApplicationTransactionTemplatedCommentQuery())
+            ->setTemplate($table->getApplicationTransactionCommentObject())
+            ->setViewer($this->getViewer())
+            ->withPHIDs($comment_phids)
+            ->execute();
         $comments = mpull($comments, null, 'getPHID');
       }
 
@@ -135,10 +147,8 @@ abstract class PhabricatorApplicationTransactionQuery
       $handles = array();
       $merged = array_mergev($phids);
       if ($merged) {
-        $handles = id(new PhabricatorHandleQuery())
-          ->setViewer($this->getViewer())
-          ->withPHIDs($merged)
-          ->execute();
+        $handles = $this->getViewer()->loadHandles($merged);
+        $handles = iterator_to_array($handles);
       }
       foreach ($xactions as $xaction) {
         $xaction->setHandles(
@@ -151,7 +161,7 @@ abstract class PhabricatorApplicationTransactionQuery
     return $xactions;
   }
 
-  private function buildWhereClause(AphrontDatabaseConnection $conn_r) {
+  protected function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
 
     if ($this->phids) {

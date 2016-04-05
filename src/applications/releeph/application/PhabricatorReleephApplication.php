@@ -14,7 +14,7 @@ final class PhabricatorReleephApplication extends PhabricatorApplication {
     return '/releeph/';
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-flag-checkered';
   }
 
@@ -76,6 +76,13 @@ final class PhabricatorReleephApplication extends PhabricatorApplication {
         ),
       ),
     );
+  }
+
+  public function getMailCommandObjects() {
+    // TODO: Pull requests don't implement any interfaces which give them
+    // meaningful commands, so don't expose ReleephRequest here for now.
+    // Once we add relevant commands, return it here.
+    return array();
   }
 
 }

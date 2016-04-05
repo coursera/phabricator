@@ -14,7 +14,7 @@ final class PhabricatorOAuthServerApplication extends PhabricatorApplication {
     return pht('OAuth Login Provider');
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-hotel';
   }
 
@@ -34,8 +34,14 @@ final class PhabricatorOAuthServerApplication extends PhabricatorApplication {
     return true;
   }
 
-  public function getHelpURI() {
-    return PhabricatorEnv::getDoclink('Using the Phabricator OAuth Server');
+  public function getHelpDocumentationArticles(PhabricatorUser $viewer) {
+    return array(
+      array(
+        'name' => pht('Using the Phabricator OAuth Server'),
+        'href' => PhabricatorEnv::getDoclink(
+          'Using the Phabricator OAuth Server'),
+      ),
+    );
   }
 
   public function getRoutes() {
@@ -44,14 +50,14 @@ final class PhabricatorOAuthServerApplication extends PhabricatorApplication {
         '(?:query/(?P<queryKey>[^/]+)/)?'
           => 'PhabricatorOAuthClientListController',
         'auth/' => 'PhabricatorOAuthServerAuthController',
-        'test/(?P<id>\d+)/' => 'PhabricatorOAuthServerTestController',
         'token/' => 'PhabricatorOAuthServerTokenController',
+        $this->getEditRoutePattern('edit/') =>
+          'PhabricatorOAuthClientEditController',
         'client/' => array(
-          'create/' => 'PhabricatorOAuthClientEditController',
-          'delete/(?P<phid>[^/]+)/' => 'PhabricatorOAuthClientDeleteController',
-          'edit/(?P<phid>[^/]+)/' => 'PhabricatorOAuthClientEditController',
-          'view/(?P<phid>[^/]+)/' => 'PhabricatorOAuthClientViewController',
-          'secret/(?P<phid>[^/]+)/' => 'PhabricatorOAuthClientSecretController',
+          'delete/(?P<id>\d+)/' => 'PhabricatorOAuthClientDeleteController',
+          'view/(?P<id>\d+)/' => 'PhabricatorOAuthClientViewController',
+          'secret/(?P<id>\d+)/' => 'PhabricatorOAuthClientSecretController',
+          'test/(?P<id>\d+)/' => 'PhabricatorOAuthClientTestController',
         ),
       ),
     );

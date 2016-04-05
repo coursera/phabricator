@@ -10,7 +10,7 @@ final class PhabricatorAuthApplication extends PhabricatorApplication {
     return '/auth/';
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-key';
   }
 
@@ -26,58 +26,16 @@ final class PhabricatorAuthApplication extends PhabricatorApplication {
     return pht('Login/Registration');
   }
 
-  public function getHelpURI() {
+  public function getHelpDocumentationArticles(PhabricatorUser $viewer) {
     // NOTE: Although reasonable help exists for this in "Configuring Accounts
-    // and Registration", specifying a help URI here means we get the menu
+    // and Registration", specifying help items here means we get the menu
     // item in all the login/link interfaces, which is confusing and not
     // helpful.
 
     // TODO: Special case this, or split the auth and auth administration
     // applications?
 
-    return null;
-  }
-
-  public function buildMainMenuItems(
-    PhabricatorUser $user,
-    PhabricatorController $controller = null) {
-
-    $items = array();
-
-    if ($user->isLoggedIn()) {
-      $item = id(new PHUIListItemView())
-        ->addClass('core-menu-item')
-        ->setName(pht('Log Out'))
-        ->setIcon('fa-sign-out')
-        ->setWorkflow(true)
-        ->setHref('/logout/')
-        ->setSelected(($controller instanceof PhabricatorLogoutController))
-        ->setAural(pht('Log Out'))
-        ->setOrder(900);
-      $items[] = $item;
-    } else {
-      if ($controller instanceof PhabricatorAuthController) {
-        // Don't show the "Login" item on auth controllers, since they're
-        // generally all related to logging in anyway.
-      } else {
-        $uri = new PhutilURI('/auth/start/');
-        if ($controller) {
-          $path = $controller->getRequest()->getPath();
-          $uri->setQueryParam('next', $path);
-        }
-        $item = id(new PHUIListItemView())
-          ->addClass('core-menu-item')
-          ->setName(pht('Log In'))
-          // TODO: Login icon?
-          ->setIcon('fa-sign-in')
-          ->setHref($uri)
-          ->setAural(pht('Log In'))
-          ->setOrder(900);
-        $items[] = $item;
-      }
-    }
-
-    return $items;
+    return array();
   }
 
   public function getApplicationGroup() {
@@ -97,6 +55,8 @@ final class PhabricatorAuthApplication extends PhabricatorApplication {
         ),
         'login/(?P<pkey>[^/]+)/(?:(?P<extra>[^/]+)/)?'
           => 'PhabricatorAuthLoginController',
+        '(?P<loggedout>loggedout)/' => 'PhabricatorAuthStartController',
+        'invite/(?P<code>[^/]+)/' => 'PhabricatorAuthInviteController',
         'register/(?:(?P<akey>[^/]+)/)?' => 'PhabricatorAuthRegisterController',
         'start/' => 'PhabricatorAuthStartController',
         'validate/' => 'PhabricatorAuthValidateController',

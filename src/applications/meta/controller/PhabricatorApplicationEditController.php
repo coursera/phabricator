@@ -3,10 +3,6 @@
 final class PhabricatorApplicationEditController
   extends PhabricatorApplicationsController {
 
-  public function shouldRequireAdmin() {
-    return true;
-  }
-
   public function handleRequest(AphrontRequest $request) {
     $user = $request->getUser();
     $application = $request->getURIData('application');
@@ -128,8 +124,7 @@ final class PhabricatorApplicationEditController
             ->setValue(idx($descriptions, $capability))
             ->setCaption($caption));
       } else {
-        $form->appendChild(
-          id(new AphrontFormPolicyControl())
+        $control = id(new AphrontFormPolicyControl())
           ->setUser($user)
           ->setDisabled($locked)
           ->setCapability($capability)
@@ -137,7 +132,33 @@ final class PhabricatorApplicationEditController
           ->setPolicies($policies)
           ->setLabel($label)
           ->setName('policy:'.$capability)
-          ->setCaption($caption));
+          ->setCaption($caption);
+
+        $template = $application->getCapabilityTemplatePHIDType($capability);
+        if ($template) {
+          $phid_types = PhabricatorPHIDType::getAllTypes();
+          $phid_type = idx($phid_types, $template);
+          if ($phid_type) {
+            $template_object = $phid_type->newObject();
+            if ($template_object) {
+              $template_policies = id(new PhabricatorPolicyQuery())
+                ->setViewer($user)
+                ->setObject($template_object)
+                ->execute();
+
+              // NOTE: We want to expose both any object template policies
+              // (like "Subscribers") and any custom policy.
+              $all_policies = $template_policies + $policies;
+
+              $control->setPolicies($all_policies);
+              $control->setTemplateObject($template_object);
+            }
+          }
+
+          $control->setTemplatePHIDType($template);
+        }
+
+        $form->appendControl($control);
       }
 
     }
@@ -150,22 +171,27 @@ final class PhabricatorApplicationEditController
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb($application->getName(), $view_uri);
     $crumbs->addTextCrumb(pht('Edit Policies'));
+    $crumbs->setBorder(true);
 
     $header = id(new PHUIHeaderView())
-      ->setHeader(pht('Edit Policies: %s', $application->getName()));
+      ->setHeader(pht('Edit Policies: %s', $application->getName()))
+      ->setHeaderIcon('fa-pencil');
 
     $object_box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
+      ->setHeaderText(pht('Policies'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $object_box,
-      ),
-      array(
-        'title' => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
 }

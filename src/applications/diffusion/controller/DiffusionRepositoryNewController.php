@@ -2,8 +2,8 @@
 
 final class DiffusionRepositoryNewController extends DiffusionController {
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $this->getViewer();
 
     $this->requireApplicationCapability(
       DiffusionCreateRepositoriesCapability::CAPABILITY);
@@ -53,11 +53,11 @@ final class DiffusionRepositoryNewController extends DiffusionController {
             'import',
             pht('Import an Existing External Repository'),
             pht(
-              'Import a repository hosted somewhere else, like GitHub, '.
-              'Bitbucket, or your organization\'s existing servers. '.
-              'Phabricator will read changes from the repository but will '.
-              'not host or manage it. The authoritative master version of '.
-              'the repository will stay where it is now.')))
+              "Import a repository hosted somewhere else, like GitHub, ".
+              "Bitbucket, or your organization's existing servers. ".
+              "Phabricator will read changes from the repository but will ".
+              "not host or manage it. The authoritative master version of ".
+              "the repository will stay where it is now.")))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue(pht('Continue'))
@@ -70,14 +70,10 @@ final class DiffusionRepositoryNewController extends DiffusionController {
       ->setHeaderText(pht('Create or Import Repository'))
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $form_box,
-      ),
-      array(
-        'title' => pht('New Repository'),
-      ));
+    return $this->newPage()
+      ->setTitle(pht('New Repository'))
+      ->setCrumbs($crumbs)
+      ->appendChild($form_box);
   }
 
 }

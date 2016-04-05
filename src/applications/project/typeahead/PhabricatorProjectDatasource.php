@@ -3,6 +3,10 @@
 final class PhabricatorProjectDatasource
   extends PhabricatorTypeaheadDatasource {
 
+  public function getBrowseTitle() {
+    return pht('Browse Projects');
+  }
+
   public function getPlaceholderText() {
     return pht('Type a project name...');
   }
@@ -18,17 +22,26 @@ final class PhabricatorProjectDatasource
 
     // Allow users to type "#qa" or "qa" to find "Quality Assurance".
     $raw_query = ltrim($raw_query, '#');
+    $tokens = self::tokenizeString($raw_query);
 
-    if (!strlen($raw_query)) {
-      return array();
+    $query = id(new PhabricatorProjectQuery())
+      ->needImages(true)
+      ->needSlugs(true);
+
+    if ($tokens) {
+      $query->withNameTokens($tokens);
     }
 
-    $projs = id(new PhabricatorProjectQuery())
-      ->setViewer($viewer)
-      ->needImages(true)
-      ->needSlugs(true)
-      ->withDatasourceQuery($raw_query)
-      ->execute();
+    // If this is for policy selection, prevent users from using milestones.
+    $for_policy = $this->getParameter('policy');
+    if ($for_policy) {
+      $query->withIsMilestone(false);
+    }
+
+    $for_autocomplete = $this->getParameter('autocomplete');
+
+    $projs = $this->executeQuery($query);
+
     $projs = mpull($projs, null, 'getPHID');
 
     $must_have_cols = $this->getParameter('mustHaveColumns', false);
@@ -47,24 +60,46 @@ final class PhabricatorProjectDatasource
       if (!isset($has_cols[$proj->getPHID()])) {
         continue;
       }
+
+      $slug = $proj->getPrimarySlug();
+      if (!strlen($slug)) {
+        foreach ($proj->getSlugs() as $slug_object) {
+          $slug = $slug_object->getSlug();
+          if (strlen($slug)) {
+            break;
+          }
+        }
+      }
+
+      // If we're building results for the autocompleter and this project
+      // doesn't have any usable slugs, don't return it as a result.
+      if ($for_autocomplete && !strlen($slug)) {
+        continue;
+      }
+
       $closed = null;
       if ($proj->isArchived()) {
         $closed = pht('Archived');
       }
 
       $all_strings = mpull($proj->getSlugs(), 'getSlug');
-      $all_strings[] = $proj->getName();
+      $all_strings[] = $proj->getDisplayName();
       $all_strings = implode(' ', $all_strings);
 
       $proj_result = id(new PhabricatorTypeaheadResult())
         ->setName($all_strings)
-        ->setDisplayName($proj->getName())
-        ->setDisplayType('Project')
-        ->setURI('/tag/'.$proj->getPrimarySlug().'/')
+        ->setDisplayName($proj->getDisplayName())
+        ->setDisplayType($proj->getDisplayIconName())
+        ->setURI($proj->getURI())
         ->setPHID($proj->getPHID())
-        ->setIcon($proj->getIcon().' bluegrey')
+        ->setIcon($proj->getDisplayIconIcon())
+        ->setColor($proj->getColor())
         ->setPriorityType('proj')
         ->setClosed($closed);
+
+      if (strlen($slug)) {
+        $proj_result->setAutocomplete('#'.$slug);
+      }
 
       $proj_result->setImageURI($proj->getProfileImageURI());
 

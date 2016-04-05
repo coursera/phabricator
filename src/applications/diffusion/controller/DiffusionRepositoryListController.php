@@ -6,28 +6,10 @@ final class DiffusionRepositoryListController extends DiffusionController {
     return true;
   }
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $controller = id(new PhabricatorApplicationSearchController())
-      ->setQueryKey($request->getURIData('queryKey'))
-      ->setSearchEngine(new PhabricatorRepositorySearchEngine())
-      ->setNavigation($this->buildSideNavView());
-
-    return $this->delegateToController($controller);
-  }
-
-  public function buildSideNavView($for_app = false) {
-    $viewer = $this->getRequest()->getUser();
-
-    $nav = new AphrontSideNavFilterView();
-    $nav->setBaseURI(new PhutilURI($this->getApplicationURI()));
-
-    id(new PhabricatorRepositorySearchEngine())
-      ->setViewer($viewer)
-      ->addNavigationItems($nav->getMenu());
-
-    $nav->selectFilter(null);
-
-    return $nav;
+  public function handleRequest(AphrontRequest $request) {
+    return id(new PhabricatorRepositorySearchEngine())
+      ->setController($this)
+      ->buildResponse();
   }
 
   protected function buildApplicationCrumbs() {
@@ -41,6 +23,7 @@ final class DiffusionRepositoryListController extends DiffusionController {
         ->setName(pht('New Repository'))
         ->setHref($this->getApplicationURI('new/'))
         ->setDisabled(!$can_create)
+        ->setWorkflow(!$can_create)
         ->setIcon('fa-plus-square'));
 
     return $crumbs;

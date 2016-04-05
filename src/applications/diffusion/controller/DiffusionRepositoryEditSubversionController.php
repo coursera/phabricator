@@ -3,24 +3,15 @@
 final class DiffusionRepositoryEditSubversionController
   extends DiffusionRepositoryEditController {
 
-  protected function processDiffusionRequest(AphrontRequest $request) {
-    $viewer = $request->getUser();
-    $drequest = $this->diffusionRequest;
-    $repository = $drequest->getRepository();
-
-    $repository = id(new PhabricatorRepositoryQuery())
-      ->setViewer($viewer)
-      ->requireCapabilities(
-        array(
-          PhabricatorPolicyCapability::CAN_VIEW,
-          PhabricatorPolicyCapability::CAN_EDIT,
-        ))
-      ->withIDs(array($repository->getID()))
-      ->executeOne();
-
-    if (!$repository) {
-      return new Aphront404Response();
+  public function handleRequest(AphrontRequest $request) {
+    $response = $this->loadDiffusionContextForEdit();
+    if ($response) {
+      return $response;
     }
+
+    $viewer = $this->getViewer();
+    $drequest = $this->getDiffusionRequest();
+    $repository = $drequest->getRepository();
 
     switch ($repository->getVersionControlSystem()) {
       case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
@@ -72,6 +63,9 @@ final class DiffusionRepositoryEditSubversionController
     $crumbs->addTextCrumb(pht('Edit Subversion Info'));
 
     $title = pht('Edit Subversion Info (%s)', $repository->getName());
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon('fa-pencil');
 
     $policies = id(new PhabricatorPolicyQuery())
       ->setViewer($viewer)
@@ -84,11 +78,11 @@ final class DiffusionRepositoryEditSubversionController
         pht(
           "You can set the **Repository UUID**, which will help Phabriactor ".
           "provide better context in some cases. You can find the UUID of a ".
-          "repository by running `svn info`.".
-          "\n\n".
+          "repository by running `%s`.\n\n".
           "If you want to import only part of a repository, like `trunk/`, ".
           "you can set a path in **Import Only**. Phabricator will ignore ".
-          "commits which do not affect this path."))
+          "commits which do not affect this path.",
+          'svn info'))
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setName('uuid')
@@ -105,17 +99,20 @@ final class DiffusionRepositoryEditSubversionController
           ->addCancelButton($edit_uri));
 
     $form_box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
+      ->setHeaderText(pht('Subversion'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->setForm($form);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $form_box,
-      ),
-      array(
-        'title' => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
   }
 
 }

@@ -18,7 +18,7 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
     return "\xE2\x99\x9F";
   }
 
-  public function getFontIcon() {
+  public function getIcon() {
     return 'fa-users';
   }
 
@@ -34,18 +34,18 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
     return false;
   }
 
-  public function getEventListeners() {
-    return array(
-      new PhabricatorPeopleHovercardEventListener(),
-    );
-  }
-
   public function getRoutes() {
     return array(
       '/people/' => array(
         '(query/(?P<key>[^/]+)/)?' => 'PhabricatorPeopleListController',
         'logs/(?:query/(?P<queryKey>[^/]+)/)?'
           => 'PhabricatorPeopleLogsController',
+        'invite/' => array(
+          '(?:query/(?P<queryKey>[^/]+)/)?'
+            => 'PhabricatorPeopleInviteListController',
+          'send/'
+            => 'PhabricatorPeopleInviteSendController',
+        ),
         'approve/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleApproveController',
         '(?P<via>disapprove)/(?P<id>[1-9]\d*)/'
           => 'PhabricatorPeopleDisableController',
@@ -62,11 +62,15 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
           'PhabricatorPeopleProfileEditController',
         'picture/(?P<id>[1-9]\d*)/' =>
           'PhabricatorPeopleProfilePictureController',
+        'manage/(?P<id>[1-9]\d*)/' =>
+          'PhabricatorPeopleProfileManageController',
+        ),
+      '/p/(?P<username>[\w._-]+)/' => array(
+        '' => 'PhabricatorPeopleProfileViewController',
+        'panel/'
+          => $this->getPanelRouting('PhabricatorPeopleProfilePanelController'),
+        'calendar/' => 'PhabricatorPeopleCalendarController',
       ),
-      '/p/(?P<username>[\w._-]+)/'
-        => 'PhabricatorPeopleProfileController',
-      '/p/(?P<username>[\w._-]+)/calendar/'
-        => 'PhabricatorPeopleCalendarController',
     );
   }
 
@@ -89,14 +93,14 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
     if (!$user->getIsAdmin()) {
       return array();
     }
+    $limit = self::MAX_STATUS_ITEMS;
 
     $need_approval = id(new PhabricatorPeopleQuery())
       ->setViewer($user)
       ->withIsApproved(false)
       ->withIsDisabled(false)
-      ->setLimit(self::MAX_STATUS_ITEMS)
+      ->setLimit($limit)
       ->execute();
-
     if (!$need_approval) {
       return array();
     }
@@ -104,10 +108,16 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
     $status = array();
 
     $count = count($need_approval);
-    $count_str = self::formatStatusCount(
-      $count,
-      '%s Users Need Approval',
-      '%d User(s) Need Approval');
+    if ($count >= $limit) {
+      $count_str = pht(
+        '%s+ User(s) Need Approval',
+        new PhutilNumber($limit - 1));
+    } else {
+      $count_str = pht(
+        '%s User(s) Need Approval',
+        new PhutilNumber($count));
+    }
+
     $type = PhabricatorApplicationStatusView::TYPE_NEEDS_ATTENTION;
     $status[] = id(new PhabricatorApplicationStatusView())
       ->setType($type)
@@ -117,55 +127,35 @@ final class PhabricatorPeopleApplication extends PhabricatorApplication {
     return $status;
   }
 
-  public function buildMainMenuItems(
-    PhabricatorUser $user,
-    PhabricatorController $controller = null) {
-
+  public function getQuickCreateItems(PhabricatorUser $viewer) {
     $items = array();
 
-    if ($user->isLoggedIn() && $user->isUserActivated()) {
-      $image = $user->loadProfileImageURI();
+    $can_create = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $this,
+      PeopleCreateUsersCapability::CAPABILITY);
 
+    if ($can_create) {
       $item = id(new PHUIListItemView())
-        ->setName($user->getUsername())
-        ->setHref('/p/'.$user->getUsername().'/')
-        ->addClass('core-menu-item')
-        ->setAural(pht('Profile'))
-        ->setOrder(100);
-
-      $classes = array(
-        'phabricator-core-menu-icon',
-        'phabricator-core-menu-profile-image',
-      );
-
-      $item->appendChild(
-        phutil_tag(
-          'span',
-          array(
-            'class' => implode(' ', $classes),
-            'style' => 'background-image: url('.$image.')',
-          ),
-          ''));
-
+        ->setName(pht('User Account'))
+        ->setIcon('fa-users')
+        ->setHref($this->getBaseURI().'create/');
+      $items[] = $item;
+    } else if ($viewer->getIsAdmin()) {
+      $item = id(new PHUIListItemView())
+        ->setName(pht('Bot Account'))
+        ->setIcon('fa-android')
+        ->setHref($this->getBaseURI().'new/bot/');
       $items[] = $item;
     }
 
     return $items;
   }
 
-
-  public function getQuickCreateItems(PhabricatorUser $viewer) {
-    $items = array();
-
-    if ($viewer->getIsAdmin()) {
-      $item = id(new PHUIListItemView())
-        ->setName(pht('User Account'))
-        ->setIcon('fa-users')
-        ->setHref($this->getBaseURI().'create/');
-      $items[] = $item;
-    }
-
-    return $items;
+  public function getApplicationSearchDocumentTypes() {
+    return array(
+      PhabricatorPeopleUserPHIDType::TYPECONST,
+    );
   }
 
 }

@@ -3,19 +3,13 @@
 final class PhortuneCartCheckoutController
   extends PhortuneCartController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $cart = id(new PhortuneCartQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->needPurchases(true)
       ->executeOne();
     if (!$cart) {
@@ -113,7 +107,8 @@ final class PhortuneCartCheckoutController
     $cart_box = id(new PHUIObjectBoxView())
       ->setFormErrors($errors)
       ->setHeaderText(pht('Cart Contents'))
-      ->appendChild($cart_table);
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
+      ->setTable($cart_table);
 
     $title = $cart->getName();
 
@@ -159,7 +154,6 @@ final class PhortuneCartCheckoutController
         array(
           'class' => 'button grey',
           'href'  => $payment_method_uri,
-          'sigil' => 'workflow',
         ),
         pht('Add New Payment Method'));
       $form->appendChild(
@@ -201,28 +195,39 @@ final class PhortuneCartCheckoutController
       $provider_form = new PHUIFormLayoutView();
       $provider_form->appendChild(
         id(new AphrontFormMarkupControl())
-          ->setLabel('Pay With')
+          ->setLabel(pht('Pay With'))
           ->setValue($one_time_options));
     }
 
     $payment_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Choose Payment Method'))
+      ->setBackground(PHUIObjectBoxView::BLUE_PROPERTY)
       ->appendChild($form)
       ->appendChild($provider_form);
+
+    $description_box = $this->renderCartDescription($cart);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Checkout'));
     $crumbs->addTextCrumb($title);
+    $crumbs->setBorder(true);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setHeaderIcon('fa-shopping-cart');
+
+    $view = id(new PHUITwoColumnView())
+      ->setHeader($header)
+      ->setFooter(array(
         $cart_box,
+        $description_box,
         $payment_box,
-      ),
-      array(
-        'title'   => $title,
       ));
+
+    return $this->newPage()
+      ->setTitle($title)
+      ->setCrumbs($crumbs)
+      ->appendChild($view);
 
   }
 }

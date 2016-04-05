@@ -16,16 +16,16 @@ final class ConduitGetCapabilitiesConduitAPIMethod extends ConduitAPIMethod {
       'available on this server.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array();
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'dict<string, any>';
   }
 
-  public function defineErrorTypes() {
-    return array();
+  public function getRequiredScope() {
+    return self::SCOPE_ALWAYS;
   }
 
   protected function execute(ConduitAPIRequest $request) {

@@ -194,7 +194,7 @@ class PhabricatorApplicationTransactionView extends AphrontView {
 
   public function render() {
     if (!$this->getObjectPHID()) {
-      throw new Exception('Call setObjectPHID() before render()!');
+      throw new PhutilInvalidStateException('setObjectPHID');
     }
 
     $view = $this->buildPHUITimelineView();
@@ -208,21 +208,24 @@ class PhabricatorApplicationTransactionView extends AphrontView {
 
   public function buildPHUITimelineView($with_hiding = true) {
     if (!$this->getObjectPHID()) {
-      throw new Exception(
-        'Call setObjectPHID() before buildPHUITimelineView()!');
+      throw new PhutilInvalidStateException('setObjectPHID');
     }
 
-    $view = new PHUITimelineView();
-    $view->setShouldTerminate($this->shouldTerminate);
-    $view->setQuoteTargetID($this->getQuoteTargetID());
-    $view->setQuoteRef($this->getQuoteRef());
+    $view = id(new PHUITimelineView())
+      ->setUser($this->getUser())
+      ->setShouldTerminate($this->shouldTerminate)
+      ->setQuoteTargetID($this->getQuoteTargetID())
+      ->setQuoteRef($this->getQuoteRef());
+
     $events = $this->buildEvents($with_hiding);
     foreach ($events as $event) {
       $view->addEvent($event);
     }
+
     if ($this->getPager()) {
       $view->setPager($this->getPager());
     }
+
     if ($this->getRenderData()) {
       $view->setRenderData($this->getRenderData());
     }
@@ -380,9 +383,21 @@ class PhabricatorApplicationTransactionView extends AphrontView {
     }
 
     foreach ($groups as $key => $group) {
-      $group = msort($group, 'getActionStrength');
-      $group = array_reverse($group);
-      $groups[$key] = $group;
+      $results = array();
+
+      // Sort transactions within the group by action strength, then by
+      // chronological order. This makes sure that multiple actions of the
+      // same type (like a close, then a reopen) render in the order they
+      // were performed.
+      $strength_groups = mgroup($group, 'getActionStrength');
+      krsort($strength_groups);
+      foreach ($strength_groups as $strength_group) {
+        foreach (msort($strength_group, 'getID') as $xaction) {
+          $results[] = $xaction;
+        }
+      }
+
+      $groups[$key] = $results;
     }
 
     return $groups;
@@ -395,6 +410,7 @@ class PhabricatorApplicationTransactionView extends AphrontView {
 
     $event = id(new PHUITimelineEventView())
       ->setUser($viewer)
+      ->setAuthorPHID($xaction->getAuthorPHID())
       ->setTransactionPHID($xaction->getPHID())
       ->setUserHandle($xaction->getHandle($xaction->getAuthorPHID()))
       ->setIcon($xaction->getIcon())
@@ -462,7 +478,9 @@ class PhabricatorApplicationTransactionView extends AphrontView {
         $event->setIsEdited(true);
       }
 
-      $event->setIsNormalComment(true);
+      if (!$has_removed_comment) {
+        $event->setIsNormalComment(true);
+      }
 
       // If we have a place for quoted text to go and this is a quotable
       // comment, pass the quote target ID to the event view.

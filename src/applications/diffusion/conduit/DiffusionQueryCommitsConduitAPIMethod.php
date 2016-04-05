@@ -11,11 +11,11 @@ final class DiffusionQueryCommitsConduitAPIMethod
     return pht('Retrieve information about commits.');
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'map<string, dict>';
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array(
       'ids'               => 'optional list<int>',
       'phids'             => 'optional list<phid>',
@@ -24,10 +24,6 @@ final class DiffusionQueryCommitsConduitAPIMethod
       'needMessages'      => 'optional bool',
       'bypassCache'       => 'optional bool',
     ) + $this->getPagerParamTypes();
-  }
-
-  public function defineErrorTypes() {
-    return array();
   }
 
   protected function execute(ConduitAPIRequest $request) {
@@ -74,17 +70,16 @@ final class DiffusionQueryCommitsConduitAPIMethod
     foreach ($commits as $commit) {
       $commit_data = $commit->getCommitData();
 
-      $callsign = $commit->getRepository()->getCallsign();
-      $identifier = $commit->getCommitIdentifier();
-      $uri = '/r'.$callsign.$identifier;
+      $uri = $commit->getURI();
       $uri = PhabricatorEnv::getProductionURI($uri);
 
       $dict = array(
         'id' => $commit->getID(),
         'phid' => $commit->getPHID(),
         'repositoryPHID' => $commit->getRepository()->getPHID(),
-        'identifier' => $identifier,
+        'identifier' => $commit->getCommitIdentifier(),
         'epoch' => $commit->getEpoch(),
+        'authorEpoch' => $commit_data->getCommitDetail('authorEpoch'),
         'uri' => $uri,
         'isImporting' => !$commit->isImported(),
         'summary' => $commit->getSummary(),
@@ -105,6 +100,7 @@ final class DiffusionQueryCommitsConduitAPIMethod
           ->withIdentifier($commit->getCommitIdentifier())
           ->execute();
 
+        $dict['authorEpoch'] = $lowlevel_commitref->getAuthorEpoch();
         $dict['author'] = $lowlevel_commitref->getAuthor();
         $dict['authorName'] = $lowlevel_commitref->getAuthorName();
         $dict['authorEmail'] = $lowlevel_commitref->getAuthorEmail();

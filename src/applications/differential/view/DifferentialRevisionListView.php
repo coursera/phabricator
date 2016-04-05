@@ -10,6 +10,8 @@ final class DifferentialRevisionListView extends AphrontView {
   private $highlightAge;
   private $header;
   private $noDataString;
+  private $noBox;
+  private $background = null;
 
   public function setNoDataString($no_data_string) {
     $this->noDataString = $no_data_string;
@@ -32,6 +34,16 @@ final class DifferentialRevisionListView extends AphrontView {
     return $this;
   }
 
+  public function setNoBox($box) {
+    $this->noBox = $box;
+    return $this;
+  }
+
+  public function setBackground($background) {
+    $this->background = $background;
+    return $this;
+  }
+
   public function getRequiredHandlePHIDs() {
     $phids = array();
     foreach ($this->revisions as $revision) {
@@ -51,11 +63,7 @@ final class DifferentialRevisionListView extends AphrontView {
   }
 
   public function render() {
-
-    $user = $this->user;
-    if (!$user) {
-      throw new Exception('Call setUser() before render()!');
-    }
+    $viewer = $this->getViewer();
 
     $fresh = PhabricatorEnv::getEnvConfig('differential.days-fresh');
     if ($fresh) {
@@ -78,12 +86,12 @@ final class DifferentialRevisionListView extends AphrontView {
 
     foreach ($this->revisions as $revision) {
       $item = id(new PHUIObjectItemView())
-        ->setUser($user);
+        ->setUser($viewer);
 
       $icons = array();
 
       $phid = $revision->getPHID();
-      $flag = $revision->getFlag($user);
+      $flag = $revision->getFlag($viewer);
       if ($flag) {
         $flag_class = PhabricatorFlagColor::getCSSClass($flag->getColor());
         $icons['flag'] = phutil_tag(
@@ -94,7 +102,7 @@ final class DifferentialRevisionListView extends AphrontView {
           '');
       }
 
-      if ($revision->getDrafts($user)) {
+      if ($revision->getDrafts($viewer)) {
         $icons['draft'] = true;
       }
 
@@ -126,7 +134,7 @@ final class DifferentialRevisionListView extends AphrontView {
 
       if (isset($icons['draft'])) {
         $draft = id(new PHUIIconView())
-          ->setIconFont('fa-comment yellow')
+          ->setIcon('fa-comment yellow')
           ->addSigil('has-tooltip')
           ->setMetadata(
             array(
@@ -160,27 +168,47 @@ final class DifferentialRevisionListView extends AphrontView {
 
       switch ($status) {
         case ArcanistDifferentialRevisionStatus::NEEDS_REVIEW:
+          $item->setStatusIcon('fa-code grey', pht('Needs Review'));
           break;
         case ArcanistDifferentialRevisionStatus::NEEDS_REVISION:
+          $item->setStatusIcon('fa-refresh red', pht('Needs Revision'));
+          break;
         case ArcanistDifferentialRevisionStatus::CHANGES_PLANNED:
-          $item->setBarColor('red');
+          $item->setStatusIcon('fa-headphones red', pht('Changes Planned'));
           break;
         case ArcanistDifferentialRevisionStatus::ACCEPTED:
-          $item->setBarColor('green');
+          $item->setStatusIcon('fa-check green', pht('Accepted'));
           break;
         case ArcanistDifferentialRevisionStatus::CLOSED:
           $item->setDisabled(true);
+          $item->setStatusIcon('fa-check-square-o black', pht('Closed'));
           break;
         case ArcanistDifferentialRevisionStatus::ABANDONED:
-          $item->setBarColor('black');
+          $item->setDisabled(true);
+          $item->setStatusIcon('fa-plane black', pht('Abandoned'));
           break;
       }
 
       $list->addItem($item);
     }
 
-    $list->setHeader($this->header);
     $list->setNoDataString($this->noDataString);
+
+
+    if ($this->header && !$this->noBox) {
+      $list->setFlush(true);
+      $list = id(new PHUIObjectBoxView())
+        ->setBackground($this->background)
+        ->setObjectList($list);
+
+      if ($this->header instanceof PHUIHeaderView) {
+        $list->setHeader($this->header);
+      } else {
+        $list->setHeaderText($this->header);
+      }
+    } else {
+      $list->setHeader($this->header);
+    }
 
     return $list;
   }

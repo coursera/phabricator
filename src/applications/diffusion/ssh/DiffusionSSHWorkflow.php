@@ -6,6 +6,7 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
   private $repository;
   private $hasWriteAccess;
   private $proxyURI;
+  private $baseRequestPath;
 
   public function getRepository() {
     if (!$this->repository) {
@@ -44,6 +45,10 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
    */
   abstract protected function identifyRepository();
   abstract protected function executeRepositoryOperations();
+
+  protected function getBaseRequestPath() {
+    return $this->baseRequestPath;
+  }
 
   protected function writeError($message) {
     $this->getErrorChannel()->write($message);
@@ -112,12 +117,23 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
   final public function execute(PhutilArgumentParser $args) {
     $this->args = $args;
 
+    $viewer = $this->getUser();
+    $have_diffusion = PhabricatorApplication::isClassInstalledForViewer(
+      'PhabricatorDiffusionApplication',
+      $viewer);
+    if (!$have_diffusion) {
+      throw new Exception(
+        pht(
+          'You do not have permission to access the Diffusion application, '.
+          'so you can not interact with repositories over SSH.'));
+    }
+
     $repository = $this->identifyRepository();
     $this->setRepository($repository);
 
     $is_cluster_request = $this->getIsClusterRequest();
     $uri = $repository->getAlmanacServiceURI(
-      $this->getUser(),
+      $viewer,
       $is_cluster_request,
       array(
         'ssh',
@@ -138,26 +154,29 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
   protected function loadRepositoryWithPath($path) {
     $viewer = $this->getUser();
 
-    $regex = '@^/?diffusion/(?P<callsign>[A-Z]+)(?:/|\z)@';
-    $matches = null;
-    if (!preg_match($regex, $path, $matches)) {
+    $info = PhabricatorRepository::parseRepositoryServicePath($path);
+    if ($info === null) {
       throw new Exception(
         pht(
-          'Unrecognized repository path "%s". Expected a path like '.
-          '"%s".',
+          'Unrecognized repository path "%s". Expected a path like "%s" '.
+          'or "%s".',
           $path,
-          '/diffusion/X/'));
+          '/diffusion/X/',
+          '/diffusion/123/'));
     }
 
-    $callsign = $matches[1];
+    $identifier = $info['identifier'];
+    $base = $info['base'];
+
+    $this->baseRequestPath = $base;
+
     $repository = id(new PhabricatorRepositoryQuery())
       ->setViewer($viewer)
-      ->withCallsigns(array($callsign))
+      ->withIdentifiers(array($identifier))
       ->executeOne();
-
     if (!$repository) {
       throw new Exception(
-        pht('No repository "%s" exists!', $callsign));
+        pht('No repository "%s" exists!', $identifier));
     }
 
     switch ($repository->getServeOverSSH()) {
@@ -169,7 +188,9 @@ abstract class DiffusionSSHWorkflow extends PhabricatorSSHWorkflow {
       case PhabricatorRepository::SERVE_OFF:
       default:
         throw new Exception(
-          pht('This repository is not available over SSH.'));
+          pht(
+            'This repository ("%s") is not available over SSH.',
+            $repository->getDisplayName()));
     }
 
     return $repository;

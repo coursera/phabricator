@@ -1,14 +1,13 @@
-#!/usr/bin/env TERM=dumb php
+#!/usr/bin/env php
 <?php
 
-// NOTE: Note that we're specifying TERM=dumb above when invoking the PHP
-// interpreter. This suppresses an error which looks like this:
+// NOTE: This script will sometimes emit a warning like this on startup:
 //
 //   No entry for terminal type "unknown";
 //   using dumb terminal settings.
 //
-// This arises from somewhere in the PHP startup machinery if TERM is not
-// set to a recognized value.
+// This can be fixed by adding "TERM=dumb" to the shebang line, but doing so
+// causes some systems to hang mysteriously. See T7119.
 
 // Commit hooks execute in an unusual context where the environment may be
 // unavailable, particularly in SVN. The first parameter to this script is
@@ -33,14 +32,14 @@ $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
 if ($argc < 2) {
-  throw new Exception(pht('usage: commit-hook <callsign>'));
+  throw new Exception(pht('usage: commit-hook <repository>'));
 }
 
 $engine = new DiffusionCommitHookEngine();
 
 $repository = id(new PhabricatorRepositoryQuery())
   ->setViewer(PhabricatorUser::getOmnipotentUser())
-  ->withCallsigns(array($argv[1]))
+  ->withIdentifiers(array($argv[1]))
   ->needProjectPHIDs(true)
   ->executeOne();
 
@@ -62,7 +61,10 @@ if ($repository->isGit() || $repository->isHg()) {
   $username = getenv(DiffusionCommitHookEngine::ENV_USER);
   if (!strlen($username)) {
     throw new Exception(
-      pht('usage: %s should be defined!', DiffusionCommitHookEngine::ENV_USER));
+      pht(
+        'No Direct Pushes: You are pushing directly to a repository hosted '.
+        'by Phabricator. This will not work. See "No Direct Pushes" in the '.
+        'documentation for more information.'));
   }
 
   if ($repository->isHg()) {
@@ -76,7 +78,7 @@ if ($repository->isGit() || $repository->isHg()) {
   // specify the correct user; read this user out of the commit log.
 
   if ($argc < 4) {
-    throw new Exception(pht('usage: commit-hook <callsign> <repo> <txn>'));
+    throw new Exception(pht('usage: commit-hook <repository> <repo> <txn>'));
   }
 
   $svn_repo = $argv[2];

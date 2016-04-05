@@ -9,7 +9,8 @@ final class FundInitiative extends FundDAO
     PhabricatorMentionableInterface,
     PhabricatorFlaggableInterface,
     PhabricatorTokenReceiverInterface,
-    PhabricatorDestructibleInterface {
+    PhabricatorDestructibleInterface,
+    PhabricatorFulltextInterface {
 
   protected $name;
   protected $ownerPHID;
@@ -125,12 +126,25 @@ final class FundInitiative extends FundDAO
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
-    return ($viewer->getPHID() == $this->getOwnerPHID());
+    if ($viewer->getPHID() == $this->getOwnerPHID()) {
+      return true;
+    }
+
+    if ($capability == PhabricatorPolicyCapability::CAN_VIEW) {
+      foreach ($viewer->getAuthorities() as $authority) {
+        if ($authority instanceof PhortuneMerchant) {
+          if ($authority->getPHID() == $this->getMerchantPHID()) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   public function describeAutomaticCapability($capability) {
-    return pht(
-      'The owner of an initiative can always view and edit it.');
+    return pht('The owner of an initiative can always view and edit it.');
   }
 
 
@@ -164,14 +178,6 @@ final class FundInitiative extends FundDAO
     return ($phid == $this->getOwnerPHID());
   }
 
-  public function shouldShowSubscribersProperty() {
-    return true;
-  }
-
-  public function shouldAllowSubscription($phid) {
-    return true;
-  }
-
 
 /* -(  PhabricatorTokenRecevierInterface  )---------------------------------- */
 
@@ -192,6 +198,14 @@ final class FundInitiative extends FundDAO
     $this->openTransaction();
       $this->delete();
     $this->saveTransaction();
+  }
+
+
+/* -(  PhabricatorFulltextInterface  )--------------------------------------- */
+
+
+  public function newFulltextEngine() {
+    return new FundInitiativeFulltextEngine();
   }
 
 }

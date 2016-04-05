@@ -3,6 +3,10 @@
 final class PhabricatorSearchDatasource
   extends PhabricatorTypeaheadCompositeDatasource {
 
+  public function getBrowseTitle() {
+    return pht('Browse Results');
+  }
+
   public function getPlaceholderText() {
     return pht('Type an object name...');
   }
@@ -17,6 +21,7 @@ final class PhabricatorSearchDatasource
       new PhabricatorProjectDatasource(),
       new PhabricatorApplicationDatasource(),
       new PhabricatorTypeaheadMonogramDatasource(),
+      new DiffusionRepositoryDatasource(),
       new DiffusionSymbolDatasource(),
     );
   }
